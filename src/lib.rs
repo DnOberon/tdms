@@ -1,3 +1,6 @@
+//! A Rust library for reading LabView TDMS files.
+//!
+//! More information about the TDMS file format can be found here: <https://www.ni.com/en-us/support/documentation/supplemental/07/tdms-file-format-internal-structure.html>
 use std::any::Any;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
@@ -8,13 +11,15 @@ use std::{fs, io};
 
 mod error;
 use crate::Endianness::{Big, Little};
-use crate::TdmsError::{General, InvalidSegment, StringConversionError, UnsupportedVersion};
+use crate::TdmsError::{
+    General, InvalidSegment, NotImplemented, StringConversionError, UnsupportedVersion,
+};
 pub use error::TdmsError;
 
 #[cfg(test)]
 mod tests;
 
-/// bitmasks for the Table of Contents byte
+/// These are bitmasks for the Table of Contents byte.
 const K_TOC_META_DATA: u32 = 1 << 1;
 const K_TOC_NEW_OBJ_LIST: u32 = 1 << 2;
 const K_TOC_RAW_DATA: u32 = 1 << 3;
@@ -22,7 +27,7 @@ const K_TOC_INTERLEAVED_DATA: u32 = 1 << 5;
 const K_TOC_BIG_ENDIAN: u32 = 1 << 6;
 const K_TOC_DAQMX_RAW_DATA: u32 = 1 << 7;
 
-/// datatype for matching to the data_type bytes after read
+/// Represents the potential TDMS data types .
 #[derive(Debug)]
 pub enum TdmsDataType {
     Void,
@@ -49,17 +54,21 @@ pub enum TdmsDataType {
     DAQmxRawData = 0xFFFFFFFF,
 }
 
+/// Ease of use enum for determining how to read numerical values.
 pub enum Endianness {
     Little,
     Big,
 }
 
 #[derive(Debug)]
+/// `TDDMSFile` represents all Segments of a TDMS file in the order in which they were read.
 pub struct TDMSFile {
     segments: Vec<Segment>,
 }
 
 impl TDMSFile {
+    /// `from_path` expects a path and whether or not to read only the metadata of each segment vs
+    /// the entire file into working memory.
     pub fn from_path(path: &str, metadata_only: bool) -> Result<Self, TdmsError> {
         let metadata = fs::metadata(Path::new(path))?;
         let mut file = File::open(Path::new(path))?;
@@ -82,6 +91,7 @@ impl TDMSFile {
 }
 
 #[derive(Debug)]
+/// `Segment` represents an entire TDMS File Segment and potentially its raw data.
 pub struct Segment {
     lead_in: LeadIn,
     // TODO: remove Option when actually ready to parse
@@ -93,9 +103,9 @@ pub struct Segment {
 }
 
 impl Segment {
-    /// New expects a file who's cursor position is at the start of a new TDMS segment
-    /// you will see an InvalidSegment error return if the file position isn't correct as the first
-    /// byte read will not be the correct tag for a segment
+    /// New expects a file who's cursor position is at the start of a new TDMS segment.
+    /// You will see an InvalidSegment error return if the file position isn't correct as the first
+    /// byte read will not be the correct tag for a segment.
     pub fn new(file: &mut File) -> Result<Self, TdmsError> {
         let start_pos = file.stream_position()?;
         let mut lead_in = [0; 28];
@@ -117,7 +127,7 @@ impl Segment {
         });
     }
 
-    /// the following function is not accurate unless the lead in portion of the segment has been read
+    /// this function is not accurate unless the lead in portion of the segment has been read
     pub fn endianess(&self) -> Endianness {
         return if self.lead_in.table_of_contents & K_TOC_BIG_ENDIAN != 1 {
             Little
@@ -126,18 +136,19 @@ impl Segment {
         };
     }
 
-    /// the following function is not accurate unless the lead in portion of the segment has been read
+    /// this function is not accurate unless the lead in portion of the segment has been read
     pub fn interleaved_data(&self) -> bool {
         return self.lead_in.table_of_contents & K_TOC_INTERLEAVED_DATA == 1;
     }
 
-    /// the following function is not accurate unless the lead in portion of the segment has been read
+    /// this function is not accurate unless the lead in portion of the segment has been read
     pub fn daqmx_raw_data(&self) -> bool {
         return self.lead_in.table_of_contents & K_TOC_DAQMX_RAW_DATA == 1;
     }
 }
 
 #[derive(Debug)]
+/// `LeadIn` represents the 28 bytes representing the lead in to a TDMS Segment.
 pub struct LeadIn {
     tag: [u8; 4],
     table_of_contents: u32,
@@ -204,20 +215,29 @@ impl LeadIn {
 }
 
 #[derive(Debug)]
+/// `Metadata` represents the collection of metadata objects for a segment in the order in which they
+/// were read
 pub struct Metadata {
     number_of_objects: u32,
     objects: Vec<MetadataObject>,
 }
 
 #[derive(Debug)]
+/// `MetadataObject` represents information that is not raw data associated with the segment. May
+/// contain DAQmx raw data index, a standard index, or nothing at all.
 pub struct MetadataObject {
     object_path: String,
     raw_data_index: Vec<u8>,
     properties: Vec<MetadataProperty>,
 }
 
+const DAQMX_FORMAT_SCALAR_IDENTIFIER: [u8; 4] = [69, 12, 00, 00];
+const DAQMX_DIGITAL_LINE_SCALAR_IDENTIFIER: [u8; 4] = [69, 13, 00, 00];
+
 impl Metadata {
-    // we must read from file because the length of the objects might be variable
+    /// from_file accepts an open file and attempts to read metadata from the currently selected
+    /// segment. Note that you must have read the segment's lead in information completely before
+    /// attempting to use this function
     pub fn from_file(endianness: Endianness, file: &mut File) -> Result<Self, TdmsError> {
         let mut buf: [u8; 4] = [0; 4];
         file.read(&mut buf)?;
@@ -249,10 +269,33 @@ impl Metadata {
             let mut path = vec![0; length];
             file.read(&mut path)?;
 
-            let name = match String::from_utf8(path) {
+            // all strings are UTF8 encoded in TDMS files, most prefixed by the length attribute
+            // like above
+            let object_path = match String::from_utf8(path) {
                 Ok(n) => n,
                 Err(_) => return Err(StringConversionError()),
             };
+        }
+
+        let mut buf: [u8; 4] = [0; 4];
+        file.read(&mut buf)?;
+
+        if buf == DAQMX_FORMAT_SCALAR_IDENTIFIER {
+            // TODO: implement
+            return Err(NotImplemented);
+        } else if buf == DAQMX_DIGITAL_LINE_SCALAR_IDENTIFIER {
+            // TODO: implement
+            return Err(NotImplemented);
+        } else {
+            let raw_data_index: u32 = match endianness {
+                Little => u32::from_le_bytes(buf),
+                Big => u32::from_be_bytes(buf),
+            };
+
+            if raw_data_index != 0xFFFFFFFF {
+                // TODO: implement
+                return Err(NotImplemented);
+            }
         }
 
         return Err(General(String::from("not implemented")));
@@ -260,8 +303,18 @@ impl Metadata {
 }
 
 #[derive(Debug)]
+/// `MetadataProperty` is a key/value pair associated with a `MetadataObject`
 pub struct MetadataProperty {
     name: String,
     data_type: TdmsDataType,
     value: Vec<u8>,
+}
+
+impl MetadataProperty {
+    /// from_file accepts an open file and attempts to read metadata properties from the currently
+    /// selected segment and metadata object. Note that you must have read the metadata object's lead
+    /// in information prior to using this function
+    pub fn from_file(endianness: Endianness, file: &mut File) -> Result<Self, TdmsError> {
+        return Err(NotImplemented);
+    }
 }

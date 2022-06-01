@@ -2,6 +2,7 @@ use std::io;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+/// A set of library specific errors.
 pub enum TdmsError {
     #[error("{0:?}")]
     ReadError(#[from] io::Error),
@@ -17,4 +18,7 @@ pub enum TdmsError {
 
     #[error("unable to convert to String")]
     StringConversionError(),
+
+    #[error("not implemented")]
+    NotImplemented,
 }
