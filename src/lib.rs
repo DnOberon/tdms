@@ -1,18 +1,16 @@
 //! A Rust library for reading LabView TDMS files.
 //!
 //! More information about the TDMS file format can be found here: <https://www.ni.com/en-us/support/documentation/supplemental/07/tdms-file-format-internal-structure.html>
-use std::any::Any;
+use std::fs;
 use std::fs::File;
-use std::io::{BufReader, Read, Seek, SeekFrom};
-use std::num::TryFromIntError;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
-use std::string::FromUtf8Error;
-use std::{fs, io};
 
 mod error;
 use crate::Endianness::{Big, Little};
 use crate::TdmsError::{
-    General, InvalidSegment, NotImplemented, StringConversionError, UnsupportedVersion,
+    General, InvalidSegment, NotImplemented, StringConversionError, UnknownDataType,
+    UnsupportedVersion,
 };
 pub use error::TdmsError;
 
@@ -28,7 +26,7 @@ const K_TOC_BIG_ENDIAN: u32 = 1 << 6;
 const K_TOC_DAQMX_RAW_DATA: u32 = 1 << 7;
 
 /// Represents the potential TDMS data types .
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum TdmsDataType {
     Void,
     I8,
@@ -54,7 +52,50 @@ pub enum TdmsDataType {
     DAQmxRawData = 0xFFFFFFFF,
 }
 
+impl TryFrom<i32> for TdmsDataType {
+    type Error = TdmsError;
+
+    fn try_from(v: i32) -> Result<Self, TdmsError> {
+        match v {
+            x if x == TdmsDataType::Void as i32 => Ok(TdmsDataType::Void),
+            x if x == TdmsDataType::I8 as i32 => Ok(TdmsDataType::I8),
+            x if x == TdmsDataType::I16 as i32 => Ok(TdmsDataType::I16),
+            x if x == TdmsDataType::I32 as i32 => Ok(TdmsDataType::I32),
+            x if x == TdmsDataType::I64 as i32 => Ok(TdmsDataType::I64),
+            x if x == TdmsDataType::U8 as i32 => Ok(TdmsDataType::U8),
+            x if x == TdmsDataType::U16 as i32 => Ok(TdmsDataType::U16),
+            x if x == TdmsDataType::U32 as i32 => Ok(TdmsDataType::U32),
+            x if x == TdmsDataType::U64 as i32 => Ok(TdmsDataType::U64),
+            x if x == TdmsDataType::SingleFloat as i32 => Ok(TdmsDataType::SingleFloat),
+            x if x == TdmsDataType::DoubleFloat as i32 => Ok(TdmsDataType::DoubleFloat),
+            x if x == TdmsDataType::ExtendedFloat as i32 => Ok(TdmsDataType::ExtendedFloat),
+            x if x == TdmsDataType::SingleFloatWithUnit as i32 => {
+                Ok(TdmsDataType::SingleFloatWithUnit)
+            }
+            x if x == TdmsDataType::DoubleFloatWithUnit as i32 => {
+                Ok(TdmsDataType::DoubleFloatWithUnit)
+            }
+            x if x == TdmsDataType::ExtendedFloatWithUnit as i32 => {
+                Ok(TdmsDataType::ExtendedFloatWithUnit)
+            }
+            x if x == TdmsDataType::String as i32 => Ok(TdmsDataType::String),
+            x if x == TdmsDataType::Boolean as i32 => Ok(TdmsDataType::Boolean),
+            x if x == TdmsDataType::TimeStamp as i32 => Ok(TdmsDataType::TimeStamp),
+            x if x == TdmsDataType::FixedPoint as i32 => Ok(TdmsDataType::FixedPoint),
+            x if x == TdmsDataType::ComplexSingleFloat as i32 => {
+                Ok(TdmsDataType::ComplexSingleFloat)
+            }
+            x if x == TdmsDataType::ComplexDoubleFloat as i32 => {
+                Ok(TdmsDataType::ComplexDoubleFloat)
+            }
+            x if x == TdmsDataType::DAQmxRawData as i32 => Ok(TdmsDataType::DAQmxRawData),
+            _ => Err(UnknownDataType()),
+        }
+    }
+}
+
 /// Ease of use enum for determining how to read numerical values.
+#[derive(Clone, Copy, Debug)]
 pub enum Endianness {
     Little,
     Big,
@@ -117,9 +158,17 @@ impl Segment {
         // calculate the end position by taking the start and adding the offset plus lead in bytes
         let end_pos = lead_in.next_segment_offset + 28 + start_pos;
 
+        let endianness = if lead_in.table_of_contents & K_TOC_BIG_ENDIAN != 1 {
+            Little
+        } else {
+            Big
+        };
+
+        let metadata = Metadata::from_file(endianness, file)?;
+
         return Ok(Segment {
             lead_in,
-            metadata: None,
+            metadata: Some(metadata),
             raw_data: None,
             start_pos,
             /// lead in plus offset
@@ -227,7 +276,7 @@ pub struct Metadata {
 /// contain DAQmx raw data index, a standard index, or nothing at all.
 pub struct MetadataObject {
     object_path: String,
-    raw_data_index: Vec<u8>,
+    raw_data_index: Option<RawDataIndex>,
     properties: Vec<MetadataProperty>,
 }
 
@@ -246,6 +295,8 @@ impl Metadata {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
         };
+
+        let mut objects: Vec<MetadataObject> = vec![];
 
         for _ in 0..number_of_objects {
             let mut buf: [u8; 4] = [0; 4];
@@ -275,30 +326,110 @@ impl Metadata {
                 Ok(n) => n,
                 Err(_) => return Err(StringConversionError()),
             };
-        }
 
-        let mut buf: [u8; 4] = [0; 4];
-        file.read(&mut buf)?;
+            let mut buf: [u8; 4] = [0; 4];
+            file.read(&mut buf)?;
+            let mut raw_data_index: Option<RawDataIndex> = None;
 
-        if buf == DAQMX_FORMAT_SCALAR_IDENTIFIER {
-            // TODO: implement
-            return Err(NotImplemented);
-        } else if buf == DAQMX_DIGITAL_LINE_SCALAR_IDENTIFIER {
-            // TODO: implement
-            return Err(NotImplemented);
-        } else {
-            let raw_data_index: u32 = match endianness {
+            if buf == DAQMX_FORMAT_SCALAR_IDENTIFIER {
+                // TODO: implement
+                return Err(NotImplemented);
+            } else if buf == DAQMX_DIGITAL_LINE_SCALAR_IDENTIFIER {
+                // TODO: implement
+                return Err(NotImplemented);
+            } else {
+                let first_byte: u32 = match endianness {
+                    Little => u32::from_le_bytes(buf),
+                    Big => u32::from_be_bytes(buf),
+                };
+
+                if first_byte != 0xFFFFFFFF && first_byte != 0x0000000 {
+                    raw_data_index = Some(RawDataIndex::from_file(endianness, file)?)
+                }
+            }
+
+            file.read(&mut buf)?;
+            let num_of_properties: u32 = match endianness {
                 Little => u32::from_le_bytes(buf),
                 Big => u32::from_be_bytes(buf),
             };
 
-            if raw_data_index != 0xFFFFFFFF {
-                // TODO: implement
-                return Err(NotImplemented);
+            // now we iterate through all the properties for the object
+            let mut properties: Vec<MetadataProperty> = vec![];
+            for _ in 0..num_of_properties {
+                match MetadataProperty::from_file(endianness, file) {
+                    Ok(p) => properties.push(p),
+                    Err(e) => return Err(e),
+                };
             }
+
+            objects.push(MetadataObject {
+                object_path,
+                raw_data_index,
+                properties,
+            });
         }
 
-        return Err(General(String::from("not implemented")));
+        return Ok(Metadata {
+            number_of_objects,
+            objects,
+        });
+    }
+}
+
+#[derive(Debug)]
+pub struct RawDataIndex {
+    data_type: TdmsDataType,
+    array_dimension: u32, // should only ever be 1
+    number_of_values: u64,
+    number_of_bytes: Option<u64>, // only valid if data type is TDMS String
+}
+
+impl RawDataIndex {
+    pub fn from_file(endianness: Endianness, file: &mut File) -> Result<Self, TdmsError> {
+        let mut buf: [u8; 4] = [0; 4];
+
+        // now we check the data type
+        file.read(&mut buf)?;
+        let data_type = match endianness {
+            Big => i32::from_be_bytes(buf),
+            Little => i32::from_le_bytes(buf),
+        };
+
+        let data_type = TdmsDataType::try_from(data_type)?;
+
+        file.read(&mut buf)?;
+        let array_dimension: u32 = match endianness {
+            Little => u32::from_le_bytes(buf),
+            Big => u32::from_be_bytes(buf),
+        };
+
+        let mut buf: [u8; 8] = [0; 8];
+        file.read(&mut buf)?;
+        let number_of_values = match endianness {
+            Big => u64::from_be_bytes(buf),
+            Little => u64::from_le_bytes(buf),
+        };
+
+        let number_of_bytes: Option<u64> = match data_type {
+            TdmsDataType::String => {
+                file.read(&mut buf)?;
+                let num = match endianness {
+                    Big => u64::from_be_bytes(buf),
+                    Little => u64::from_le_bytes(buf),
+                };
+
+                Some(num)
+            }
+            _ => None,
+        };
+
+        return Ok(RawDataIndex {
+            data_type,
+            array_dimension,
+            number_of_values,
+            number_of_bytes,
+        });
     }
 }
 
@@ -307,7 +438,7 @@ impl Metadata {
 pub struct MetadataProperty {
     name: String,
     data_type: TdmsDataType,
-    value: Vec<u8>,
+    value: TDMSValue,
 }
 
 impl MetadataProperty {
@@ -315,6 +446,305 @@ impl MetadataProperty {
     /// selected segment and metadata object. Note that you must have read the metadata object's lead
     /// in information prior to using this function
     pub fn from_file(endianness: Endianness, file: &mut File) -> Result<Self, TdmsError> {
-        return Err(NotImplemented);
+        let mut buf: [u8; 4] = [0; 4];
+        file.read(&mut buf)?;
+
+        let length: u32 = match endianness {
+            Little => u32::from_le_bytes(buf),
+            Big => u32::from_be_bytes(buf),
+        };
+
+        // must be a vec due to variable length
+        let length = match usize::try_from(length) {
+            Ok(l) => l,
+            Err(_) => {
+                return Err(General(String::from(
+                    "error converting strength length to system size",
+                )))
+            }
+        };
+
+        let mut name = vec![0; length];
+        file.read(&mut name)?;
+
+        // all strings are UTF8 encoded in TDMS files, most prefixed by the length attribute
+        // like above
+        let name = match String::from_utf8(name) {
+            Ok(n) => n,
+            Err(_) => return Err(StringConversionError()),
+        };
+
+        // now we check the data type
+        file.read(&mut buf)?;
+        let data_type = match endianness {
+            Big => i32::from_be_bytes(buf),
+            Little => i32::from_le_bytes(buf),
+        };
+
+        let data_type = TdmsDataType::try_from(data_type)?;
+        let value = TDMSValue::from_file(endianness, data_type, file)?;
+
+        return Ok(MetadataProperty {
+            name,
+            data_type,
+            value,
+        });
+    }
+}
+
+#[derive(Debug)]
+pub struct TDMSValue {
+    data_type: TdmsDataType,
+    endianness: Endianness,
+    value: Option<Vec<u8>>,
+}
+
+impl TDMSValue {
+    /// from_file accepts an open file and a data type and attempts to read the file, generating a
+    /// value struct containing the actual value
+    pub fn from_file(
+        endianness: Endianness,
+        data_type: TdmsDataType,
+        file: &mut File,
+    ) -> Result<Self, TdmsError> {
+        match data_type {
+            TdmsDataType::Void => {
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: None,
+                })
+            }
+            TdmsDataType::I8 => {
+                let mut buf: [u8; 1] = [0; 1];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::I16 => {
+                let mut buf: [u8; 2] = [0; 2];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::I32 => {
+                let mut buf: [u8; 4] = [0; 4];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::I64 => {
+                let mut buf: [u8; 8] = [0; 8];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::U8 => {
+                let mut buf: [u8; 1] = [0; 1];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::U16 => {
+                let mut buf: [u8; 2] = [0; 2];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::U32 => {
+                let mut buf: [u8; 4] = [0; 4];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::U64 => {
+                let mut buf: [u8; 8] = [0; 8];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::SingleFloat => {
+                let mut buf: [u8; 4] = [0; 4];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::DoubleFloat => {
+                let mut buf: [u8; 8] = [0; 8];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::ExtendedFloat => {
+                let mut buf: [u8; 10] = [0; 10];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::SingleFloatWithUnit => {
+                let mut buf: [u8; 4] = [0; 4];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::DoubleFloatWithUnit => {
+                let mut buf: [u8; 8] = [0; 8];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::ExtendedFloatWithUnit => {
+                let mut buf: [u8; 10] = [0; 10];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::String => {
+                let mut buf: [u8; 4] = [0; 4];
+                file.read(&mut buf)?;
+
+                let length: u32 = match endianness {
+                    Little => u32::from_le_bytes(buf),
+                    Big => u32::from_be_bytes(buf),
+                };
+
+                // must be a vec due to variable length
+                let length = match usize::try_from(length) {
+                    Ok(l) => l,
+                    Err(_) => {
+                        return Err(General(String::from(
+                            "error converting strength length to system size",
+                        )))
+                    }
+                };
+
+                let mut value = vec![0; length];
+                file.read(&mut value)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(value),
+                });
+            }
+            TdmsDataType::Boolean => {
+                let mut buf: [u8; 1] = [0; 1];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::TimeStamp => {
+                let mut buf: [u8; 16] = [0; 16];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            // there is little information on how to handle FixedPoint types, for
+            // now we'll store them as a 64 bit integer and hope that will be enough
+            TdmsDataType::FixedPoint => {
+                let mut buf: [u8; 8] = [0; 8];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::ComplexSingleFloat => {
+                let mut buf: [u8; 8] = [0; 8];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::ComplexDoubleFloat => {
+                let mut buf: [u8; 16] = [0; 16];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+            TdmsDataType::DAQmxRawData => {
+                let mut buf: [u8; 8] = [0; 8];
+                file.read(&mut buf)?;
+
+                return Ok(TDMSValue {
+                    data_type,
+                    endianness,
+                    value: Some(buf.to_vec()),
+                });
+            }
+        }
     }
 }

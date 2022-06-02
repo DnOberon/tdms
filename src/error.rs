@@ -19,6 +19,9 @@ pub enum TdmsError {
     #[error("unable to convert to String")]
     StringConversionError(),
 
+    #[error("unknown data type")]
+    UnknownDataType(),
+
     #[error("not implemented")]
     NotImplemented,
 }
