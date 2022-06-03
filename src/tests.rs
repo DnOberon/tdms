@@ -29,3 +29,23 @@ fn can_read_all_segments() {
 
     assert_eq!(file.segments.len(), 2);
 }
+
+#[test]
+fn can_read_all_segments_be() {
+    let file = match TDMSFile::from_path("data/big_endian.tdms", false) {
+        Ok(f) => f,
+        Err(e) => panic!("{:?}", e),
+    };
+
+    assert_eq!(file.segments.len(), 2);
+}
+
+#[test]
+fn can_read_all_segments_raw() {
+    let file = match TDMSFile::from_path("data/raw.tdms", false) {
+        Ok(f) => f,
+        Err(e) => panic!("{:?}", e),
+    };
+
+    assert_eq!(file.segments.len(), 2);
+}

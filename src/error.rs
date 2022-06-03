@@ -13,11 +13,8 @@ pub enum TdmsError {
     #[error("invalid segment - malformed or missing lead-in tag")]
     InvalidSegment(),
 
-    #[error("unsupported version, only version 4173 supported")]
-    UnsupportedVersion(),
-
-    #[error("unable to convert to String")]
-    StringConversionError(),
+    #[error("unable to convert {0} to String")]
+    StringConversionError(String),
 
     #[error("unknown data type")]
     UnknownDataType(),

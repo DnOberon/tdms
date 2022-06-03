@@ -10,7 +10,6 @@ mod error;
 use crate::Endianness::{Big, Little};
 use crate::TdmsError::{
     General, InvalidSegment, NotImplemented, StringConversionError, UnknownDataType,
-    UnsupportedVersion,
 };
 pub use error::TdmsError;
 
@@ -158,10 +157,10 @@ impl Segment {
         // calculate the end position by taking the start and adding the offset plus lead in bytes
         let end_pos = lead_in.next_segment_offset + 28 + start_pos;
 
-        let endianness = if lead_in.table_of_contents & K_TOC_BIG_ENDIAN != 1 {
-            Little
-        } else {
+        let endianness = if lead_in.table_of_contents & K_TOC_BIG_ENDIAN != 0 {
             Big
+        } else {
+            Little
         };
 
         let metadata = Metadata::from_file(endianness, file)?;
@@ -178,10 +177,10 @@ impl Segment {
 
     /// this function is not accurate unless the lead in portion of the segment has been read
     pub fn endianess(&self) -> Endianness {
-        return if self.lead_in.table_of_contents & K_TOC_BIG_ENDIAN != 1 {
-            Little
-        } else {
+        return if self.lead_in.table_of_contents & K_TOC_BIG_ENDIAN != 0 {
             Big
+        } else {
+            Little
         };
     }
 
@@ -225,20 +224,16 @@ impl LeadIn {
         let mut version: [u8; 4] = [0; 4];
         version.clone_from_slice(&lead_in[8..12]);
 
-        let version_number = if table_of_contents & K_TOC_BIG_ENDIAN == 1 {
+        let version_number = if table_of_contents & K_TOC_BIG_ENDIAN != 0 {
             u32::from_be_bytes(version)
         } else {
             u32::from_le_bytes(version)
         };
 
-        if version_number != 4713 {
-            return Err(UnsupportedVersion());
-        }
-
         let mut offset: [u8; 8] = [0; 8];
         offset.clone_from_slice(&lead_in[12..20]);
 
-        let next_segment_offset = if table_of_contents & K_TOC_BIG_ENDIAN == 1 {
+        let next_segment_offset = if table_of_contents & K_TOC_BIG_ENDIAN != 0 {
             u64::from_be_bytes(offset)
         } else {
             u64::from_le_bytes(offset)
@@ -247,7 +242,7 @@ impl LeadIn {
         let mut raw_offset: [u8; 8] = [0; 8];
         raw_offset.clone_from_slice(&lead_in[20..28]);
 
-        let raw_data_offset = if table_of_contents & K_TOC_BIG_ENDIAN == 1 {
+        let raw_data_offset = if table_of_contents & K_TOC_BIG_ENDIAN != 0 {
             u64::from_be_bytes(raw_offset)
         } else {
             u64::from_le_bytes(raw_offset)
@@ -324,25 +319,31 @@ impl Metadata {
             // like above
             let object_path = match String::from_utf8(path) {
                 Ok(n) => n,
-                Err(_) => return Err(StringConversionError()),
+                Err(_) => {
+                    return Err(StringConversionError(String::from(
+                        "unable to convert object path",
+                    )))
+                }
             };
 
             let mut buf: [u8; 4] = [0; 4];
             file.read(&mut buf)?;
             let mut raw_data_index: Option<RawDataIndex> = None;
 
-            if buf == DAQMX_FORMAT_SCALAR_IDENTIFIER {
+            let first_byte: u32 = match endianness {
+                Little => u32::from_le_bytes(buf),
+                Big => u32::from_be_bytes(buf),
+            };
+
+            // indicates format changing scaler
+            if first_byte == 0x69120000 || first_byte == 0x00001269 {
                 // TODO: implement
                 return Err(NotImplemented);
-            } else if buf == DAQMX_DIGITAL_LINE_SCALAR_IDENTIFIER {
+                // indicates digital line scaler
+            } else if first_byte == 0x69130000 || first_byte == 0x0000126A {
                 // TODO: implement
                 return Err(NotImplemented);
             } else {
-                let first_byte: u32 = match endianness {
-                    Little => u32::from_le_bytes(buf),
-                    Big => u32::from_be_bytes(buf),
-                };
-
                 if first_byte != 0xFFFFFFFF && first_byte != 0x0000000 {
                     raw_data_index = Some(RawDataIndex::from_file(endianness, file)?)
                 }
@@ -471,7 +472,11 @@ impl MetadataProperty {
         // like above
         let name = match String::from_utf8(name) {
             Ok(n) => n,
-            Err(_) => return Err(StringConversionError()),
+            Err(_) => {
+                return Err(StringConversionError(String::from(
+                    "unable to convert metadata property name",
+                )))
+            }
         };
 
         // now we check the data type
