@@ -273,6 +273,7 @@ pub struct Metadata {
 pub struct MetadataObject {
     object_path: String,
     raw_data_index: Option<RawDataIndex>,
+    daqmx_data_index: Option<DAQmxDataIndex>,
     properties: Vec<MetadataProperty>,
 }
 
@@ -372,6 +373,7 @@ impl Metadata {
             objects.push(MetadataObject {
                 object_path,
                 raw_data_index,
+                daqmx_data_index,
                 properties,
             });
         }
