@@ -13,6 +13,9 @@ pub enum TdmsError {
     #[error("invalid segment - malformed or missing lead-in tag")]
     InvalidSegment(),
 
+    #[error("invalid DAQmx data index")]
+    InvalidDAQmxDataIndex(),
+
     #[error("unable to convert {0} to String")]
     StringConversionError(String),
 

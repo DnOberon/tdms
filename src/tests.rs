@@ -47,5 +47,5 @@ fn can_read_all_segments_raw() {
         Err(e) => panic!("{:?}", e),
     };
 
-    assert_eq!(file.segments.len(), 2);
+    assert_eq!(file.segments.len(), 3);
 }

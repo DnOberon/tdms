@@ -9,7 +9,8 @@ use std::path::Path;
 mod error;
 use crate::Endianness::{Big, Little};
 use crate::TdmsError::{
-    General, InvalidSegment, NotImplemented, StringConversionError, UnknownDataType,
+    General, InvalidDAQmxDataIndex, InvalidSegment, NotImplemented, StringConversionError,
+    UnknownDataType,
 };
 pub use error::TdmsError;
 
@@ -329,6 +330,7 @@ impl Metadata {
             let mut buf: [u8; 4] = [0; 4];
             file.read(&mut buf)?;
             let mut raw_data_index: Option<RawDataIndex> = None;
+            let mut daqmx_data_index: Option<DAQmxDataIndex> = None;
 
             let first_byte: u32 = match endianness {
                 Little => u32::from_le_bytes(buf),
@@ -337,12 +339,15 @@ impl Metadata {
 
             // indicates format changing scaler
             if first_byte == 0x69120000 || first_byte == 0x00001269 {
-                // TODO: implement
-                return Err(NotImplemented);
+                let index = DAQmxDataIndex::from_file(endianness, file, true)?;
+                daqmx_data_index = Some(index);
                 // indicates digital line scaler
-            } else if first_byte == 0x69130000 || first_byte == 0x0000126A {
-                // TODO: implement
-                return Err(NotImplemented);
+            } else if first_byte == 0x69130000
+                || first_byte == 0x0000126A
+                || first_byte == 0x00001369
+            {
+                let index = DAQmxDataIndex::from_file(endianness, file, true)?;
+                daqmx_data_index = Some(index);
             } else {
                 if first_byte != 0xFFFFFFFF && first_byte != 0x0000000 {
                     raw_data_index = Some(RawDataIndex::from_file(endianness, file)?)
@@ -430,6 +435,143 @@ impl RawDataIndex {
             array_dimension,
             number_of_values,
             number_of_bytes,
+        });
+    }
+}
+
+#[derive(Debug)]
+pub struct DAQmxDataIndex {
+    data_type: TdmsDataType,
+    array_dimension: u32, // should only ever be 1
+    number_of_values: u64,
+    format_changing_size: Option<u32>,
+    format_changing_vec: Option<Vec<FormatChangingScaler>>,
+    vec_size: u32,
+    elements_in_vec: u32,
+}
+
+impl DAQmxDataIndex {
+    pub fn from_file(
+        endianness: Endianness,
+        file: &mut File,
+        is_format_changing: bool,
+    ) -> Result<Self, TdmsError> {
+        let mut buf: [u8; 4] = [0; 4];
+        file.read(&mut buf)?;
+
+        let data_type = match endianness {
+            Big => u32::from_be_bytes(buf),
+            Little => u32::from_le_bytes(buf),
+        };
+
+        if data_type != 0xFFFFFFFF {
+            return Err(InvalidDAQmxDataIndex());
+        }
+
+        file.read(&mut buf)?;
+        let array_dimension = match endianness {
+            Big => u32::from_be_bytes(buf),
+            Little => u32::from_le_bytes(buf),
+        };
+
+        let mut buf: [u8; 8] = [0; 8];
+        file.read(&mut buf)?;
+        let number_of_values = match endianness {
+            Big => u64::from_be_bytes(buf),
+            Little => u64::from_le_bytes(buf),
+        };
+
+        let mut buf: [u8; 4] = [0; 4];
+
+        let mut format_changing_size: Option<u32> = None;
+        let mut format_changing_vec: Option<Vec<FormatChangingScaler>> = None;
+        if is_format_changing {
+            file.read(&mut buf)?;
+            let changing_vec_size = match endianness {
+                Big => u32::from_be_bytes(buf),
+                Little => u32::from_le_bytes(buf),
+            };
+
+            let mut vec: Vec<FormatChangingScaler> = vec![];
+            for _ in 0..changing_vec_size {
+                vec.push(FormatChangingScaler::from_file(endianness, file)?)
+            }
+        }
+
+        file.read(&mut buf)?;
+        let vec_size = match endianness {
+            Big => u32::from_be_bytes(buf),
+            Little => u32::from_le_bytes(buf),
+        };
+
+        file.read(&mut buf)?;
+        let elements_in_vec = match endianness {
+            Big => u32::from_be_bytes(buf),
+            Little => u32::from_le_bytes(buf),
+        };
+
+        return Ok(DAQmxDataIndex {
+            data_type: TdmsDataType::DAQmxRawData,
+            array_dimension,
+            number_of_values,
+            format_changing_size,
+            format_changing_vec,
+            vec_size,
+            elements_in_vec,
+        });
+    }
+}
+#[derive(Debug)]
+pub struct FormatChangingScaler {
+    data_type: TdmsDataType,
+    raw_buffer_index: u32,
+    raw_byte_offset: u32,
+    sample_format_bitmap: u32,
+    scale_id: u32,
+}
+
+impl FormatChangingScaler {
+    pub fn from_file(endianness: Endianness, file: &mut File) -> Result<Self, TdmsError> {
+        let mut buf: [u8; 4] = [0; 4];
+        file.read(&mut buf)?;
+
+        let data_type = match endianness {
+            Big => i32::from_be_bytes(buf),
+            Little => i32::from_le_bytes(buf),
+        };
+
+        let data_type = TdmsDataType::try_from(data_type)?;
+
+        file.read(&mut buf)?;
+        let raw_buffer_index = match endianness {
+            Little => u32::from_le_bytes(buf),
+            Big => u32::from_be_bytes(buf),
+        };
+
+        file.read(&mut buf)?;
+        let raw_byte_offset = match endianness {
+            Little => u32::from_le_bytes(buf),
+            Big => u32::from_be_bytes(buf),
+        };
+
+        file.read(&mut buf)?;
+        let sample_format_bitmap = match endianness {
+            Little => u32::from_le_bytes(buf),
+            Big => u32::from_be_bytes(buf),
+        };
+
+        file.read(&mut buf)?;
+        let scale_id = match endianness {
+            Little => u32::from_le_bytes(buf),
+            Big => u32::from_be_bytes(buf),
+        };
+
+        return Ok(FormatChangingScaler {
+            data_type,
+            raw_buffer_index,
+            raw_byte_offset,
+            sample_format_bitmap,
+            scale_id,
         });
     }
 }
