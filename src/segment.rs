@@ -2,7 +2,7 @@ use crate::{
     Big, General, InvalidDAQmxDataIndex, InvalidSegment, Little, StringConversionError, TDMSValue,
     TdmsDataType, TdmsError,
 };
-use std::fs::File;
+use std::collections::{BTreeSet, HashSet};
 use std::io::{Read, Seek};
 
 /// These are bitmasks for the Table of Contents byte.
@@ -58,9 +58,9 @@ impl Segment {
             Little
         };
 
-        let metadata: Option<Metadata> = None;
+        let mut metadata: Option<Metadata> = None;
         if lead_in.table_of_contents & K_TOC_META_DATA != 0 {
-            let metadata = Some(Metadata::from_reader(endianness, r)?);
+            metadata = Some(Metadata::from_reader(endianness, r)?);
         }
 
         let mut raw_data: Option<Vec<u8>> = None;
@@ -80,6 +80,46 @@ impl Segment {
             /// lead in plus offset
             end_pos,
         });
+    }
+
+    pub fn groups(&self) -> Vec<String> {
+        return match &self.metadata {
+            Some(metadata) => {
+                let mut groups = vec![];
+
+                for obj in &metadata.objects {
+                    let path = obj.object_path.clone();
+
+                    let paths: Vec<&str> = path.split('/').collect();
+                    if paths.len() == 2 && paths[1] != "" {
+                        groups.push(rem_first_and_last(paths[1]).to_string());
+                    }
+                }
+
+                groups
+            }
+            None => vec![],
+        };
+    }
+
+    pub fn channels(&self) -> Vec<String> {
+        return match &self.metadata {
+            Some(metadata) => {
+                let mut channels = vec![];
+
+                for obj in &metadata.objects {
+                    let path = obj.object_path.clone();
+
+                    let paths: Vec<&str> = path.split('/').collect();
+                    if paths.len() == 3 && paths[2] != "" {
+                        channels.push(rem_first_and_last(paths[2]).to_string());
+                    }
+                }
+
+                channels
+            }
+            None => vec![],
+        };
     }
 
     /// this function is not accurate unless the lead in portion of the segment has been read
@@ -562,4 +602,11 @@ impl MetadataProperty {
             value,
         });
     }
+}
+
+fn rem_first_and_last(value: &str) -> &str {
+    let mut chars = value.chars();
+    chars.next();
+    chars.next_back();
+    chars.as_str()
 }

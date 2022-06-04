@@ -31,11 +31,47 @@ fn can_read_all_segments() {
 }
 
 #[test]
+fn can_read_all_groups_from_segment() {
+    let file = match TDMSFile::from_path("data/standard.tdms", false) {
+        Ok(f) => f,
+        Err(e) => panic!("{:?}", e),
+    };
+
+    if file.segments.len() > 0 {
+        let groups = file.segments[0].groups();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0], "EHM");
+
+        let channels = file.segments[0].channels();
+        assert_eq!(channels.len(), 18);
+        assert_eq!(channels[9], "SensoPowerV");
+        //random check of a middle channel to verify we're reading all of them correctly
+    } else {
+        panic!("no segments to read");
+    }
+
+    assert_eq!(file.segments.len(), 2);
+}
+
+#[test]
 fn can_read_all_segments_be() {
     let file = match TDMSFile::from_path("data/big_endian.tdms", false) {
         Ok(f) => f,
         Err(e) => panic!("{:?}", e),
     };
+
+    if file.segments.len() > 0 {
+        let groups = file.segments[0].groups();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0], "Measured Data");
+
+        let channels = file.segments[0].channels();
+        assert_eq!(channels.len(), 2);
+        assert_eq!(channels[1], "Phase sweep");
+        //random check of a middle channel to verify we're reading all of them correctly
+    } else {
+        panic!("no segments to read");
+    }
 
     assert_eq!(file.segments.len(), 2);
 }
@@ -46,6 +82,19 @@ fn can_read_all_segments_raw() {
         Ok(f) => f,
         Err(e) => panic!("{:?}", e),
     };
+
+    if file.segments.len() > 0 {
+        let groups = file.segments[0].groups();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0], "Layer Data");
+
+        let channels = file.segments[0].channels();
+        assert_eq!(channels.len(), 7);
+        assert_eq!(channels[4], "Fifth Chan");
+        //random check of a middle channel to verify we're reading all of them correctly
+    } else {
+        panic!("no segments to read");
+    }
 
     assert_eq!(file.segments.len(), 3);
 }
