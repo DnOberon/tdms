@@ -9,6 +9,8 @@ use std::io::{Read, Seek};
 #[allow(dead_code)]
 const K_TOC_META_DATA: u32 = 1 << 1;
 #[allow(dead_code)]
+// this flag represents a segment who's channel list/order has been changed from the previous segments
+// and therefore a new order for processing the raw data must be followed
 const K_TOC_NEW_OBJ_LIST: u32 = 1 << 2;
 #[allow(dead_code)]
 const K_TOC_RAW_DATA: u32 = 1 << 3;
@@ -56,13 +58,24 @@ impl Segment {
             Little
         };
 
-        let metadata = Metadata::from_reader(endianness, r)?;
-        let data: Vec<u8> = vec![];
+        let metadata: Option<Metadata> = None;
+        if lead_in.table_of_contents & K_TOC_META_DATA != 0 {
+            let metadata = Some(Metadata::from_reader(endianness, r)?);
+        }
+
+        let mut raw_data: Option<Vec<u8>> = None;
+        if !metadata_only {
+            let mut input = r.take(lead_in.next_segment_offset - lead_in.raw_data_offset);
+            let mut data: Vec<u8> = vec![];
+            input.read_to_end(&mut data)?;
+
+            raw_data = Some(data);
+        }
 
         return Ok(Segment {
             lead_in,
-            metadata: Some(metadata),
-            raw_data: if metadata_only { None } else { Some(data) },
+            metadata,
+            raw_data,
             start_pos,
             /// lead in plus offset
             end_pos,
@@ -79,13 +92,18 @@ impl Segment {
     }
 
     /// this function is not accurate unless the lead in portion of the segment has been read
-    pub fn interleaved_data(&self) -> bool {
-        return self.lead_in.table_of_contents & K_TOC_INTERLEAVED_DATA == 1;
+    pub fn has_interleaved_data(&self) -> bool {
+        return self.lead_in.table_of_contents & K_TOC_INTERLEAVED_DATA != 0;
     }
 
     /// this function is not accurate unless the lead in portion of the segment has been read
-    pub fn daqmx_raw_data(&self) -> bool {
-        return self.lead_in.table_of_contents & K_TOC_DAQMX_RAW_DATA == 1;
+    pub fn has_daqmx_raw_data(&self) -> bool {
+        return self.lead_in.table_of_contents & K_TOC_DAQMX_RAW_DATA != 0;
+    }
+
+    /// this function is not accurate unless the lead in portion of the segment has been read
+    pub fn has_raw_data(&self) -> bool {
+        return self.lead_in.table_of_contents & K_TOC_RAW_DATA != 0;
     }
 }
 
@@ -210,7 +228,7 @@ impl Metadata {
             };
 
             let mut path = vec![0; length];
-            r.read(&mut path)?;
+            r.read_exact(&mut path)?;
 
             // all strings are UTF8 encoded in TDMS files, most prefixed by the length attribute
             // like above
@@ -224,7 +242,7 @@ impl Metadata {
             };
 
             let mut buf: [u8; 4] = [0; 4];
-            r.read(&mut buf)?;
+            r.read_exact(&mut buf)?;
             let mut raw_data_index: Option<RawDataIndex> = None;
             let mut daqmx_data_index: Option<DAQmxDataIndex> = None;
 
@@ -250,7 +268,7 @@ impl Metadata {
                 }
             }
 
-            r.read(&mut buf)?;
+            r.read_exact(&mut buf)?;
             let num_of_properties: u32 = match endianness {
                 Little => u32::from_le_bytes(buf),
                 Big => u32::from_be_bytes(buf),
@@ -296,7 +314,7 @@ impl RawDataIndex {
         let mut buf: [u8; 4] = [0; 4];
 
         // now we check the data type
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let data_type = match endianness {
             Big => i32::from_be_bytes(buf),
             Little => i32::from_le_bytes(buf),
@@ -304,14 +322,14 @@ impl RawDataIndex {
 
         let data_type = TdmsDataType::try_from(data_type)?;
 
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let array_dimension: u32 = match endianness {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
         };
 
         let mut buf: [u8; 8] = [0; 8];
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let number_of_values = match endianness {
             Big => u64::from_be_bytes(buf),
             Little => u64::from_le_bytes(buf),
@@ -319,7 +337,7 @@ impl RawDataIndex {
 
         let number_of_bytes: Option<u64> = match data_type {
             TdmsDataType::String => {
-                r.read(&mut buf)?;
+                r.read_exact(&mut buf)?;
                 let num = match endianness {
                     Big => u64::from_be_bytes(buf),
                     Little => u64::from_le_bytes(buf),
@@ -357,7 +375,7 @@ impl DAQmxDataIndex {
         is_format_changing: bool,
     ) -> Result<Self, TdmsError> {
         let mut buf: [u8; 4] = [0; 4];
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
 
         let data_type = match endianness {
             Big => u32::from_be_bytes(buf),
@@ -368,14 +386,14 @@ impl DAQmxDataIndex {
             return Err(InvalidDAQmxDataIndex());
         }
 
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let array_dimension = match endianness {
             Big => u32::from_be_bytes(buf),
             Little => u32::from_le_bytes(buf),
         };
 
         let mut buf: [u8; 8] = [0; 8];
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let number_of_values = match endianness {
             Big => u64::from_be_bytes(buf),
             Little => u64::from_le_bytes(buf),
@@ -386,7 +404,7 @@ impl DAQmxDataIndex {
         let format_changing_size: Option<u32> = None;
         let format_changing_vec: Option<Vec<FormatChangingScaler>> = None;
         if is_format_changing {
-            r.read(&mut buf)?;
+            r.read_exact(&mut buf)?;
             let changing_vec_size = match endianness {
                 Big => u32::from_be_bytes(buf),
                 Little => u32::from_le_bytes(buf),
@@ -398,13 +416,13 @@ impl DAQmxDataIndex {
             }
         }
 
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let vec_size = match endianness {
             Big => u32::from_be_bytes(buf),
             Little => u32::from_le_bytes(buf),
         };
 
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let elements_in_vec = match endianness {
             Big => u32::from_be_bytes(buf),
             Little => u32::from_le_bytes(buf),
@@ -437,7 +455,7 @@ impl FormatChangingScaler {
         r: &mut R,
     ) -> Result<Self, TdmsError> {
         let mut buf: [u8; 4] = [0; 4];
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
 
         let data_type = match endianness {
             Big => i32::from_be_bytes(buf),
@@ -446,25 +464,25 @@ impl FormatChangingScaler {
 
         let data_type = TdmsDataType::try_from(data_type)?;
 
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let raw_buffer_index = match endianness {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
         };
 
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let raw_byte_offset = match endianness {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
         };
 
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let sample_format_bitmap = match endianness {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
         };
 
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let scale_id = match endianness {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
@@ -497,7 +515,7 @@ impl MetadataProperty {
         r: &mut R,
     ) -> Result<Self, TdmsError> {
         let mut buf: [u8; 4] = [0; 4];
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
 
         let length: u32 = match endianness {
             Little => u32::from_le_bytes(buf),
@@ -515,7 +533,7 @@ impl MetadataProperty {
         };
 
         let mut name = vec![0; length];
-        r.read(&mut name)?;
+        r.read_exact(&mut name)?;
 
         // all strings are UTF8 encoded in TDMS files, most prefixed by the length attribute
         // like above
@@ -529,7 +547,7 @@ impl MetadataProperty {
         };
 
         // now we check the data type
-        r.read(&mut buf)?;
+        r.read_exact(&mut buf)?;
         let data_type = match endianness {
             Big => i32::from_be_bytes(buf),
             Little => i32::from_le_bytes(buf),
