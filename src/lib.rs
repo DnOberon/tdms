@@ -18,6 +18,36 @@ pub mod segment;
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug)]
+/// `TDDMSFile` represents all `segments` of a TDMS file in the order in which they were read.
+pub struct TDMSFile {
+    pub segments: Vec<Segment>,
+}
+
+impl TDMSFile {
+    /// `from_path` expects a path and whether or not to read only the metadata of each segment vs
+    /// the entire file into working memory.
+    pub fn from_path(path: &str, metadata_only: bool) -> Result<Self, TdmsError> {
+        let metadata = fs::metadata(Path::new(path))?;
+        let mut file = File::open(Path::new(path))?;
+        let mut segments: Vec<Segment> = vec![];
+
+        loop {
+            let segment = Segment::new(&mut file, metadata_only)?;
+
+            if segment.end_pos == metadata.len() {
+                segments.push(segment);
+                break;
+            }
+
+            file.seek(SeekFrom::Start(segment.end_pos))?;
+            segments.push(segment);
+        }
+
+        return Ok(TDMSFile { segments });
+    }
+}
+
 /// Represents the potential TDMS data types .
 #[derive(Debug, Copy, Clone)]
 pub enum TdmsDataType {
@@ -84,36 +114,6 @@ impl TryFrom<i32> for TdmsDataType {
             x if x == TdmsDataType::DAQmxRawData as i32 => Ok(TdmsDataType::DAQmxRawData),
             _ => Err(UnknownDataType()),
         }
-    }
-}
-
-#[derive(Debug)]
-/// `TDDMSFile` represents all `segments` of a TDMS file in the order in which they were read.
-pub struct TDMSFile {
-    pub segments: Vec<Segment>,
-}
-
-impl TDMSFile {
-    /// `from_path` expects a path and whether or not to read only the metadata of each segment vs
-    /// the entire file into working memory.
-    pub fn from_path(path: &str, metadata_only: bool) -> Result<Self, TdmsError> {
-        let metadata = fs::metadata(Path::new(path))?;
-        let mut file = File::open(Path::new(path))?;
-        let mut segments: Vec<Segment> = vec![];
-
-        loop {
-            let segment = Segment::new(&mut file, metadata_only)?;
-
-            if segment.end_pos == metadata.len() {
-                segments.push(segment);
-                break;
-            }
-
-            file.seek(SeekFrom::Start(segment.end_pos))?;
-            segments.push(segment);
-        }
-
-        return Ok(TDMSFile { segments });
     }
 }
 
