@@ -88,7 +88,7 @@ impl TryFrom<i32> for TdmsDataType {
 }
 
 #[derive(Debug)]
-/// `TDDMSFile` represents all Segments of a TDMS file in the order in which they were read.
+/// `TDDMSFile` represents all `segments` of a TDMS file in the order in which they were read.
 pub struct TDMSFile {
     pub segments: Vec<Segment>,
 }
@@ -118,6 +118,9 @@ impl TDMSFile {
 }
 
 #[derive(Debug)]
+/// `TDMSValue` represents a single value read from a TDMS file. This contains information on the
+/// data type and the endianness of the value if numeric. This is typically used only by segment
+/// and in the metadata properties, as using these for raw values is not good for performance.
 pub struct TDMSValue {
     pub data_type: TdmsDataType,
     pub endianness: Endianness,
