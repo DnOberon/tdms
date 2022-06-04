@@ -9,8 +9,7 @@ use std::path::Path;
 mod error;
 use crate::Endianness::{Big, Little};
 use crate::TdmsError::{
-    General, InvalidDAQmxDataIndex, InvalidSegment, NotImplemented, StringConversionError,
-    UnknownDataType,
+    General, InvalidDAQmxDataIndex, InvalidSegment, StringConversionError, UnknownDataType,
 };
 pub use error::TdmsError;
 
@@ -116,7 +115,7 @@ impl TDMSFile {
         let mut segments: Vec<Segment> = vec![];
 
         loop {
-            let segment = Segment::new(&mut file)?;
+            let segment = Segment::new(&mut file, metadata_only)?;
 
             if segment.end_pos == metadata.len() {
                 segments.push(segment);
@@ -147,7 +146,7 @@ impl Segment {
     /// New expects a file who's cursor position is at the start of a new TDMS segment.
     /// You will see an InvalidSegment error return if the file position isn't correct as the first
     /// byte read will not be the correct tag for a segment.
-    pub fn new(file: &mut File) -> Result<Self, TdmsError> {
+    pub fn new(file: &mut File, metadata_only: bool) -> Result<Self, TdmsError> {
         let start_pos = file.stream_position()?;
         let mut lead_in = [0; 28];
 
@@ -165,11 +164,12 @@ impl Segment {
         };
 
         let metadata = Metadata::from_file(endianness, file)?;
+        let data: Vec<u8> = vec![];
 
         return Ok(Segment {
             lead_in,
             metadata: Some(metadata),
-            raw_data: None,
+            raw_data: if metadata_only { None } else { Some(data) },
             start_pos,
             /// lead in plus offset
             end_pos,
