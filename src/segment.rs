@@ -36,14 +36,14 @@ pub struct Segment {
 }
 
 impl Segment {
-    /// New expects a file who's cursor position is at the start of a new TDMS segment.
+    /// New expects a reader who's cursor position is at the start of a new TDMS segment.
     /// You will see an InvalidSegment error return if the file position isn't correct as the first
     /// byte read will not be the correct tag for a segment.
-    pub fn new(file: &mut File, metadata_only: bool) -> Result<Self, TdmsError> {
-        let start_pos = file.stream_position()?;
+    pub fn new<R: Read + Seek>(r: &mut R, metadata_only: bool) -> Result<Self, TdmsError> {
+        let start_pos = r.stream_position()?;
         let mut lead_in = [0; 28];
 
-        file.read(&mut lead_in[..])?;
+        r.read(&mut lead_in[..])?;
 
         let lead_in = LeadIn::from_bytes(&lead_in)?;
 
@@ -56,7 +56,7 @@ impl Segment {
             Little
         };
 
-        let metadata = Metadata::from_file(endianness, file)?;
+        let metadata = Metadata::from_reader(endianness, r)?;
         let data: Vec<u8> = vec![];
 
         return Ok(Segment {
@@ -100,6 +100,8 @@ pub struct LeadIn {
 }
 
 impl LeadIn {
+    /// `from_bytes` accepts a 28 byte array which represents the lead-in to a segment. This is hardcoded
+    /// as there are no dynamic lengths in this portion of a segment
     pub fn from_bytes(lead_in: &[u8; 28]) -> Result<Self, TdmsError> {
         let mut tag: [u8; 4] = [0; 4];
         tag.clone_from_slice(&lead_in[0..4]);
@@ -171,12 +173,15 @@ pub struct MetadataObject {
 }
 
 impl Metadata {
-    /// from_file accepts an open file and attempts to read metadata from the currently selected
+    /// from_reader accepts an open reader and attempts to read metadata from the currently selected
     /// segment. Note that you must have read the segment's lead in information completely before
     /// attempting to use this function
-    pub fn from_file(endianness: Endianness, file: &mut File) -> Result<Self, TdmsError> {
+    pub fn from_reader<R: Read + Seek>(
+        endianness: Endianness,
+        r: &mut R,
+    ) -> Result<Self, TdmsError> {
         let mut buf: [u8; 4] = [0; 4];
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
 
         let number_of_objects = match endianness {
             Little => u32::from_le_bytes(buf),
@@ -187,7 +192,7 @@ impl Metadata {
 
         for _ in 0..number_of_objects {
             let mut buf: [u8; 4] = [0; 4];
-            file.read(&mut buf)?;
+            r.read(&mut buf)?;
 
             let length: u32 = match endianness {
                 Little => u32::from_le_bytes(buf),
@@ -205,7 +210,7 @@ impl Metadata {
             };
 
             let mut path = vec![0; length];
-            file.read(&mut path)?;
+            r.read(&mut path)?;
 
             // all strings are UTF8 encoded in TDMS files, most prefixed by the length attribute
             // like above
@@ -219,7 +224,7 @@ impl Metadata {
             };
 
             let mut buf: [u8; 4] = [0; 4];
-            file.read(&mut buf)?;
+            r.read(&mut buf)?;
             let mut raw_data_index: Option<RawDataIndex> = None;
             let mut daqmx_data_index: Option<DAQmxDataIndex> = None;
 
@@ -230,22 +235,22 @@ impl Metadata {
 
             // indicates format changing scaler
             if first_byte == 0x69120000 || first_byte == 0x00001269 {
-                let index = DAQmxDataIndex::from_file(endianness, file, true)?;
+                let index = DAQmxDataIndex::from_reader(endianness, r, true)?;
                 daqmx_data_index = Some(index);
                 // indicates digital line scaler
             } else if first_byte == 0x69130000
                 || first_byte == 0x0000126A
                 || first_byte == 0x00001369
             {
-                let index = DAQmxDataIndex::from_file(endianness, file, true)?;
+                let index = DAQmxDataIndex::from_reader(endianness, r, true)?;
                 daqmx_data_index = Some(index);
             } else {
                 if first_byte != 0xFFFFFFFF && first_byte != 0x0000000 {
-                    raw_data_index = Some(RawDataIndex::from_file(endianness, file)?)
+                    raw_data_index = Some(RawDataIndex::from_reader(endianness, r)?)
                 }
             }
 
-            file.read(&mut buf)?;
+            r.read(&mut buf)?;
             let num_of_properties: u32 = match endianness {
                 Little => u32::from_le_bytes(buf),
                 Big => u32::from_be_bytes(buf),
@@ -254,7 +259,7 @@ impl Metadata {
             // now we iterate through all the properties for the object
             let mut properties: Vec<MetadataProperty> = vec![];
             for _ in 0..num_of_properties {
-                match MetadataProperty::from_file(endianness, file) {
+                match MetadataProperty::from_reader(endianness, r) {
                     Ok(p) => properties.push(p),
                     Err(e) => return Err(e),
                 };
@@ -284,11 +289,14 @@ pub struct RawDataIndex {
 }
 
 impl RawDataIndex {
-    pub fn from_file(endianness: Endianness, file: &mut File) -> Result<Self, TdmsError> {
+    pub fn from_reader<R: Read + Seek>(
+        endianness: Endianness,
+        r: &mut R,
+    ) -> Result<Self, TdmsError> {
         let mut buf: [u8; 4] = [0; 4];
 
         // now we check the data type
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let data_type = match endianness {
             Big => i32::from_be_bytes(buf),
             Little => i32::from_le_bytes(buf),
@@ -296,14 +304,14 @@ impl RawDataIndex {
 
         let data_type = TdmsDataType::try_from(data_type)?;
 
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let array_dimension: u32 = match endianness {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
         };
 
         let mut buf: [u8; 8] = [0; 8];
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let number_of_values = match endianness {
             Big => u64::from_be_bytes(buf),
             Little => u64::from_le_bytes(buf),
@@ -311,7 +319,7 @@ impl RawDataIndex {
 
         let number_of_bytes: Option<u64> = match data_type {
             TdmsDataType::String => {
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
                 let num = match endianness {
                     Big => u64::from_be_bytes(buf),
                     Little => u64::from_le_bytes(buf),
@@ -343,13 +351,13 @@ pub struct DAQmxDataIndex {
 }
 
 impl DAQmxDataIndex {
-    pub fn from_file(
+    pub fn from_reader<R: Read + Seek>(
         endianness: Endianness,
-        file: &mut File,
+        r: &mut R,
         is_format_changing: bool,
     ) -> Result<Self, TdmsError> {
         let mut buf: [u8; 4] = [0; 4];
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
 
         let data_type = match endianness {
             Big => u32::from_be_bytes(buf),
@@ -360,14 +368,14 @@ impl DAQmxDataIndex {
             return Err(InvalidDAQmxDataIndex());
         }
 
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let array_dimension = match endianness {
             Big => u32::from_be_bytes(buf),
             Little => u32::from_le_bytes(buf),
         };
 
         let mut buf: [u8; 8] = [0; 8];
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let number_of_values = match endianness {
             Big => u64::from_be_bytes(buf),
             Little => u64::from_le_bytes(buf),
@@ -378,7 +386,7 @@ impl DAQmxDataIndex {
         let format_changing_size: Option<u32> = None;
         let format_changing_vec: Option<Vec<FormatChangingScaler>> = None;
         if is_format_changing {
-            file.read(&mut buf)?;
+            r.read(&mut buf)?;
             let changing_vec_size = match endianness {
                 Big => u32::from_be_bytes(buf),
                 Little => u32::from_le_bytes(buf),
@@ -386,17 +394,17 @@ impl DAQmxDataIndex {
 
             let mut vec: Vec<FormatChangingScaler> = vec![];
             for _ in 0..changing_vec_size {
-                vec.push(FormatChangingScaler::from_file(endianness, file)?)
+                vec.push(FormatChangingScaler::from_reader(endianness, r)?)
             }
         }
 
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let vec_size = match endianness {
             Big => u32::from_be_bytes(buf),
             Little => u32::from_le_bytes(buf),
         };
 
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let elements_in_vec = match endianness {
             Big => u32::from_be_bytes(buf),
             Little => u32::from_le_bytes(buf),
@@ -424,9 +432,12 @@ pub struct FormatChangingScaler {
 }
 
 impl FormatChangingScaler {
-    pub fn from_file(endianness: Endianness, file: &mut File) -> Result<Self, TdmsError> {
+    pub fn from_reader<R: Read + Seek>(
+        endianness: Endianness,
+        r: &mut R,
+    ) -> Result<Self, TdmsError> {
         let mut buf: [u8; 4] = [0; 4];
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
 
         let data_type = match endianness {
             Big => i32::from_be_bytes(buf),
@@ -435,25 +446,25 @@ impl FormatChangingScaler {
 
         let data_type = TdmsDataType::try_from(data_type)?;
 
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let raw_buffer_index = match endianness {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
         };
 
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let raw_byte_offset = match endianness {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
         };
 
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let sample_format_bitmap = match endianness {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
         };
 
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let scale_id = match endianness {
             Little => u32::from_le_bytes(buf),
             Big => u32::from_be_bytes(buf),
@@ -478,12 +489,15 @@ pub struct MetadataProperty {
 }
 
 impl MetadataProperty {
-    /// from_file accepts an open file and attempts to read metadata properties from the currently
+    /// from_reader accepts an open reader and attempts to read metadata properties from the currently
     /// selected segment and metadata object. Note that you must have read the metadata object's lead
     /// in information prior to using this function
-    pub fn from_file(endianness: Endianness, file: &mut File) -> Result<Self, TdmsError> {
+    pub fn from_reader<R: Read + Seek>(
+        endianness: Endianness,
+        r: &mut R,
+    ) -> Result<Self, TdmsError> {
         let mut buf: [u8; 4] = [0; 4];
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
 
         let length: u32 = match endianness {
             Little => u32::from_le_bytes(buf),
@@ -501,7 +515,7 @@ impl MetadataProperty {
         };
 
         let mut name = vec![0; length];
-        file.read(&mut name)?;
+        r.read(&mut name)?;
 
         // all strings are UTF8 encoded in TDMS files, most prefixed by the length attribute
         // like above
@@ -515,14 +529,14 @@ impl MetadataProperty {
         };
 
         // now we check the data type
-        file.read(&mut buf)?;
+        r.read(&mut buf)?;
         let data_type = match endianness {
             Big => i32::from_be_bytes(buf),
             Little => i32::from_le_bytes(buf),
         };
 
         let data_type = TdmsDataType::try_from(data_type)?;
-        let value = TDMSValue::from_file(endianness, data_type, file)?;
+        let value = TDMSValue::from_reader(endianness, data_type, r)?;
 
         return Ok(MetadataProperty {
             name,

@@ -128,12 +128,12 @@ pub struct TDMSValue {
 }
 
 impl TDMSValue {
-    /// from_file accepts an open file and a data type and attempts to read the file, generating a
+    /// from_reader accepts an open reader and a data type and attempts to read, generating a
     /// value struct containing the actual value
-    pub fn from_file(
+    pub fn from_reader<R: Read + Seek>(
         endianness: Endianness,
         data_type: TdmsDataType,
-        file: &mut File,
+        r: &mut R,
     ) -> Result<Self, TdmsError> {
         return match data_type {
             TdmsDataType::Void => Ok(TDMSValue {
@@ -143,7 +143,7 @@ impl TDMSValue {
             }),
             TdmsDataType::I8 => {
                 let mut buf: [u8; 1] = [0; 1];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -153,7 +153,7 @@ impl TDMSValue {
             }
             TdmsDataType::I16 => {
                 let mut buf: [u8; 2] = [0; 2];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -163,7 +163,7 @@ impl TDMSValue {
             }
             TdmsDataType::I32 => {
                 let mut buf: [u8; 4] = [0; 4];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -173,7 +173,7 @@ impl TDMSValue {
             }
             TdmsDataType::I64 => {
                 let mut buf: [u8; 8] = [0; 8];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -183,7 +183,7 @@ impl TDMSValue {
             }
             TdmsDataType::U8 => {
                 let mut buf: [u8; 1] = [0; 1];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -193,7 +193,7 @@ impl TDMSValue {
             }
             TdmsDataType::U16 => {
                 let mut buf: [u8; 2] = [0; 2];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -203,7 +203,7 @@ impl TDMSValue {
             }
             TdmsDataType::U32 => {
                 let mut buf: [u8; 4] = [0; 4];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -213,7 +213,7 @@ impl TDMSValue {
             }
             TdmsDataType::U64 => {
                 let mut buf: [u8; 8] = [0; 8];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -223,7 +223,7 @@ impl TDMSValue {
             }
             TdmsDataType::SingleFloat => {
                 let mut buf: [u8; 4] = [0; 4];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -233,7 +233,7 @@ impl TDMSValue {
             }
             TdmsDataType::DoubleFloat => {
                 let mut buf: [u8; 8] = [0; 8];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -243,7 +243,7 @@ impl TDMSValue {
             }
             TdmsDataType::ExtendedFloat => {
                 let mut buf: [u8; 10] = [0; 10];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -253,7 +253,7 @@ impl TDMSValue {
             }
             TdmsDataType::SingleFloatWithUnit => {
                 let mut buf: [u8; 4] = [0; 4];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -263,7 +263,7 @@ impl TDMSValue {
             }
             TdmsDataType::DoubleFloatWithUnit => {
                 let mut buf: [u8; 8] = [0; 8];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -273,7 +273,7 @@ impl TDMSValue {
             }
             TdmsDataType::ExtendedFloatWithUnit => {
                 let mut buf: [u8; 10] = [0; 10];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -283,7 +283,7 @@ impl TDMSValue {
             }
             TdmsDataType::String => {
                 let mut buf: [u8; 4] = [0; 4];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 let length: u32 = match endianness {
                     Little => u32::from_le_bytes(buf),
@@ -301,7 +301,7 @@ impl TDMSValue {
                 };
 
                 let mut value = vec![0; length];
-                file.read(&mut value)?;
+                r.read(&mut value)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -311,7 +311,7 @@ impl TDMSValue {
             }
             TdmsDataType::Boolean => {
                 let mut buf: [u8; 1] = [0; 1];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -321,7 +321,7 @@ impl TDMSValue {
             }
             TdmsDataType::TimeStamp => {
                 let mut buf: [u8; 16] = [0; 16];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -333,7 +333,7 @@ impl TDMSValue {
             // now we'll store them as a 64 bit integer and hope that will be enough
             TdmsDataType::FixedPoint => {
                 let mut buf: [u8; 8] = [0; 8];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -343,7 +343,7 @@ impl TDMSValue {
             }
             TdmsDataType::ComplexSingleFloat => {
                 let mut buf: [u8; 8] = [0; 8];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -353,7 +353,7 @@ impl TDMSValue {
             }
             TdmsDataType::ComplexDoubleFloat => {
                 let mut buf: [u8; 16] = [0; 16];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
@@ -363,7 +363,7 @@ impl TDMSValue {
             }
             TdmsDataType::DAQmxRawData => {
                 let mut buf: [u8; 8] = [0; 8];
-                file.read(&mut buf)?;
+                r.read(&mut buf)?;
 
                 Ok(TDMSValue {
                     data_type,
