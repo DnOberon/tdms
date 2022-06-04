@@ -1,4 +1,4 @@
-//! A Rust library for reading LabView TDMS files.
+//! A Rust library for reading LabVIEW TDMS files.
 //!
 //! More information about the TDMS file format can be found here: <https://www.ni.com/en-us/support/documentation/supplemental/07/tdms-file-format-internal-structure.html>
 use std::fs;
