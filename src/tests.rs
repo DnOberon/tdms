@@ -1,4 +1,4 @@
-use super::Segment;
+use crate::segment::Segment;
 use crate::TDMSFile;
 use std::fs::File;
 use std::path::Path;
