@@ -2,7 +2,7 @@ use crate::{
     Big, General, InvalidDAQmxDataIndex, InvalidSegment, Little, StringConversionError, TDMSValue,
     TdmsDataType, TdmsError,
 };
-use std::collections::{BTreeSet, HashSet};
+use indexmap::{indexset, IndexMap, IndexSet};
 use std::io::{Read, Seek};
 
 /// These are bitmasks for the Table of Contents byte.
@@ -35,7 +35,13 @@ pub struct Segment {
     pub raw_data: Option<Vec<u8>>,
     pub start_pos: u64,
     pub end_pos: u64,
+    pub groups: IndexMap<Group, Option<IndexSet<Channel>>>,
 }
+
+/// Group is a simple alias to allow our function signatures to be more telling
+pub type Group = String;
+/// Channel is a simple alias to allow our function signatures to be more telling
+pub type Channel = String;
 
 impl Segment {
     /// New expects a reader who's cursor position is at the start of a new TDMS segment.
@@ -72,54 +78,57 @@ impl Segment {
             raw_data = Some(data);
         }
 
+        // if we have have metadata, load up group and channel list for the segment - I debated
+        // somehow building this list dynamically as we read the file but honestly the performance
+        // hit according to benches was minimal and this makes a cleaner set of function boundaries
+        // and lets us get away from passing in mutable state all over the place
+        let mut groups: IndexMap<Group, Option<IndexSet<Channel>>> =
+            IndexMap::<Group, Option<IndexSet<Channel>>>::new();
+
+        match &metadata {
+            Some(metadata) => {
+                for obj in &metadata.objects {
+                    let path = obj.object_path.clone();
+                    let paths: Vec<&str> = path.split("/").collect();
+
+                    if paths.len() >= 2 && paths[1] != "" {
+                        if !groups.contains_key(rem_first_and_last(paths[1])) {
+                            let _ = groups.insert(rem_first_and_last(paths[1]).to_string(), None);
+                        }
+                    }
+
+                    if paths.len() >= 3 && paths[2] != "" {
+                        let map = groups.get_mut(rem_first_and_last(paths[1]));
+
+                        match map {
+                            Some(map) => match map {
+                                Some(map) => {
+                                    map.insert(rem_first_and_last(paths[2]).to_string());
+                                }
+                                None => {
+                                    let _ = groups.insert(
+                                        rem_first_and_last(paths[1]).to_string(),
+                                        Some(indexset! {rem_first_and_last(paths[2]).to_string()}),
+                                    );
+                                }
+                            },
+                            None => (),
+                        }
+                    }
+                }
+            }
+            _ => (),
+        }
+
         return Ok(Segment {
             lead_in,
             metadata,
             raw_data,
             start_pos,
-            /// lead in plus offset
+            // lead in plus offset
             end_pos,
+            groups,
         });
-    }
-
-    pub fn groups(&self) -> Vec<String> {
-        return match &self.metadata {
-            Some(metadata) => {
-                let mut groups = vec![];
-
-                for obj in &metadata.objects {
-                    let path = obj.object_path.clone();
-
-                    let paths: Vec<&str> = path.split('/').collect();
-                    if paths.len() == 2 && paths[1] != "" {
-                        groups.push(rem_first_and_last(paths[1]).to_string());
-                    }
-                }
-
-                groups
-            }
-            None => vec![],
-        };
-    }
-
-    pub fn channels(&self) -> Vec<String> {
-        return match &self.metadata {
-            Some(metadata) => {
-                let mut channels = vec![];
-
-                for obj in &metadata.objects {
-                    let path = obj.object_path.clone();
-
-                    let paths: Vec<&str> = path.split('/').collect();
-                    if paths.len() == 3 && paths[2] != "" {
-                        channels.push(rem_first_and_last(paths[2]).to_string());
-                    }
-                }
-
-                channels
-            }
-            None => vec![],
-        };
     }
 
     /// this function is not accurate unless the lead in portion of the segment has been read
