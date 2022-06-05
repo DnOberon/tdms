@@ -29,9 +29,7 @@ pub enum Endianness {
 /// `Segment` represents an entire TDMS File Segment and potentially its raw data.
 pub struct Segment {
     pub lead_in: LeadIn,
-    // TODO: remove Option when actually ready to parse
     pub metadata: Option<Metadata>,
-    // TODO: remove Option when actually ready to parse
     pub raw_data: Option<Vec<u8>>,
     pub start_pos: u64,
     pub end_pos: u64,
