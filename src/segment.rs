@@ -7,13 +7,10 @@ use indexmap::{indexset, IndexMap, IndexSet};
 use std::io::{Read, Seek, SeekFrom, Take};
 
 /// These are bitmasks for the Table of Contents byte.
-#[allow(dead_code)]
 const K_TOC_META_DATA: u32 = 1 << 1;
-#[allow(dead_code)]
 // this flag represents a segment who's channel list/order has been changed from the previous segments
 // and therefore a new order for processing the raw data must be followed
 const K_TOC_NEW_OBJ_LIST: u32 = 1 << 2;
-#[allow(dead_code)]
 const K_TOC_RAW_DATA: u32 = 1 << 3;
 const K_TOC_INTERLEAVED_DATA: u32 = 1 << 5;
 const K_TOC_BIG_ENDIAN: u32 = 1 << 6;
