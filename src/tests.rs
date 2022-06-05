@@ -31,6 +31,47 @@ fn can_read_all_segments() {
 }
 
 #[test]
+fn can_read_segments_data_after() {
+    let mut file = match TDMSFile::from_path("data/standard.tdms", true) {
+        Ok(f) => f,
+        Err(e) => panic!("{:?}", e),
+    };
+
+    match File::open(Path::new("data/standard.tdms")) {
+        Ok(mut r) => match file.segments[0].all_data(&mut r) {
+            Ok(data) => match data {
+                None => {
+                    panic!("unable to retrieve segment data")
+                }
+                Some(data) => assert_eq!(data.len(), 288000),
+            },
+            Err(e) => panic!("{:?}", e),
+        },
+        Err(e) => panic!("{:?}", e),
+    }
+
+    assert_eq!(file.segments.len(), 2);
+}
+
+#[test]
+fn can_read_segments_data_after_reader() {
+    let mut file = match TDMSFile::from_path("data/standard.tdms", true) {
+        Ok(f) => f,
+        Err(e) => panic!("{:?}", e),
+    };
+
+    match File::open(Path::new("data/standard.tdms")) {
+        Ok(mut r) => match file.segments[0].all_data_reader(&mut r) {
+            Ok(data) => (assert_eq!(data.limit(), 288000)),
+            Err(e) => panic!("{:?}", e),
+        },
+        Err(e) => panic!("{:?}", e),
+    }
+
+    assert_eq!(file.segments.len(), 2);
+}
+
+#[test]
 fn can_read_all_groups_from_segment() {
     let file = match TDMSFile::from_path("data/standard.tdms", false) {
         Ok(f) => f,

@@ -1,9 +1,10 @@
+use crate::TdmsError::ReadError;
 use crate::{
     Big, General, InvalidDAQmxDataIndex, InvalidSegment, Little, StringConversionError, TDMSValue,
     TdmsDataType, TdmsError,
 };
 use indexmap::{indexset, IndexMap, IndexSet};
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, SeekFrom, Take};
 
 /// These are bitmasks for the Table of Contents byte.
 #[allow(dead_code)]
@@ -44,7 +45,8 @@ pub type Channel = String;
 impl Segment {
     /// `new` expects a reader who's cursor position is at the start of a new TDMS segment.
     /// You will see an InvalidSegment error return if the reader position isn't correct as the first
-    /// byte read will not be the correct tag for a segment.
+    /// byte read will not be the correct tag for a segment. The segment will hold on to the original
+    /// reader in order to be able to return data not read into memory
     pub fn new<R: Read + Seek>(r: &mut R, metadata_only: bool) -> Result<Self, TdmsError> {
         let start_pos = r.stream_position()?;
         let mut lead_in = [0; 28];
@@ -129,6 +131,44 @@ impl Segment {
         });
     }
 
+    /// `all_data` should be used carefully as it reads all data into memory, if you're dealing with
+    /// a large file, better to pull a reader. This will return the current raw_data field if it's
+    /// already been read in, avoiding a second read. This method requires the original reader used
+    /// in the from_reader method above
+    pub fn all_data<R: Read + Seek>(&mut self, r: &mut R) -> Result<&Option<Vec<u8>>, TdmsError> {
+        match &self.raw_data {
+            Some(_) => (),
+            None => {
+                let mut data: Vec<u8> = vec![];
+                r.seek(SeekFrom::Start(
+                    self.start_pos + self.lead_in.raw_data_offset,
+                ))?;
+
+                let mut new_reader =
+                    r.take(self.lead_in.next_segment_offset - self.lead_in.raw_data_offset);
+                new_reader.read_to_end(&mut data)?;
+
+                self.raw_data = Some(data);
+            }
+        }
+
+        return Ok(&self.raw_data);
+    }
+
+    /// `all_data_reader` returns a Take containing the raw data for the segment. This function assumes
+    /// that the reader passed in is the ORIGINAL reader, or another instance thereof.
+    pub fn all_data_reader<R: Read + Seek>(&mut self, mut r: R) -> Result<Take<R>, TdmsError> {
+        match r.seek(SeekFrom::Start(
+            self.start_pos + self.lead_in.raw_data_offset,
+        )) {
+            Ok(_) => {
+                let take = r.take(self.lead_in.next_segment_offset - self.lead_in.raw_data_offset);
+                return Ok(take);
+            }
+            Err(e) => return Err(ReadError(e)),
+        }
+    }
+
     /// this function is not accurate unless the lead in portion of the segment has been read
     pub fn endianess(&self) -> Endianness {
         return if self.lead_in.table_of_contents & K_TOC_BIG_ENDIAN != 0 {
@@ -151,6 +191,11 @@ impl Segment {
     /// this function is not accurate unless the lead in portion of the segment has been read
     pub fn has_raw_data(&self) -> bool {
         return self.lead_in.table_of_contents & K_TOC_RAW_DATA != 0;
+    }
+
+    /// this function is not accurate unless the lead in portion of the segment has been read
+    pub fn has_new_obj_list(&self) -> bool {
+        return self.lead_in.table_of_contents & K_TOC_NEW_OBJ_LIST != 0;
     }
 }
 
