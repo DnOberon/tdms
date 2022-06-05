@@ -1,4 +1,5 @@
 use crate::TdmsError::ReadError;
+use crate::{to_i32, to_u32, to_u64};
 use crate::{
     Big, General, InvalidDAQmxDataIndex, InvalidSegment, Little, StringConversionError, TDMSValue,
     TdmsDataType, TdmsError,
@@ -301,10 +302,7 @@ impl Metadata {
             let mut buf: [u8; 4] = [0; 4];
             r.read(&mut buf)?;
 
-            let length: u32 = match endianness {
-                Little => u32::from_le_bytes(buf),
-                Big => u32::from_be_bytes(buf),
-            };
+            let length: u32 = to_u32!(buf, endianness);
 
             // must be a vec due to variable length
             let length = match usize::try_from(length) {
@@ -335,10 +333,7 @@ impl Metadata {
             let mut raw_data_index: Option<RawDataIndex> = None;
             let mut daqmx_data_index: Option<DAQmxDataIndex> = None;
 
-            let first_byte: u32 = match endianness {
-                Little => u32::from_le_bytes(buf),
-                Big => u32::from_be_bytes(buf),
-            };
+            let first_byte: u32 = to_u32!(buf, endianness);
 
             // indicates format changing scaler
             if first_byte == 0x69120000 || first_byte == 0x00001269 {
@@ -358,10 +353,7 @@ impl Metadata {
             }
 
             r.read_exact(&mut buf)?;
-            let num_of_properties: u32 = match endianness {
-                Little => u32::from_le_bytes(buf),
-                Big => u32::from_be_bytes(buf),
-            };
+            let num_of_properties: u32 = to_u32!(buf, endianness);
 
             // now we iterate through all the properties for the object
             let mut properties: Vec<MetadataProperty> = vec![];
@@ -404,33 +396,21 @@ impl RawDataIndex {
 
         // now we check the data type
         r.read_exact(&mut buf)?;
-        let data_type = match endianness {
-            Big => i32::from_be_bytes(buf),
-            Little => i32::from_le_bytes(buf),
-        };
+        let data_type = to_i32!(buf, endianness);
 
         let data_type = TdmsDataType::try_from(data_type)?;
 
         r.read_exact(&mut buf)?;
-        let array_dimension: u32 = match endianness {
-            Little => u32::from_le_bytes(buf),
-            Big => u32::from_be_bytes(buf),
-        };
+        let array_dimension: u32 = to_u32!(buf, endianness);
 
         let mut buf: [u8; 8] = [0; 8];
         r.read_exact(&mut buf)?;
-        let number_of_values = match endianness {
-            Big => u64::from_be_bytes(buf),
-            Little => u64::from_le_bytes(buf),
-        };
+        let number_of_values = to_u64!(buf, endianness);
 
         let number_of_bytes: Option<u64> = match data_type {
             TdmsDataType::String => {
                 r.read_exact(&mut buf)?;
-                let num = match endianness {
-                    Big => u64::from_be_bytes(buf),
-                    Little => u64::from_le_bytes(buf),
-                };
+                let num = to_u64!(buf, endianness);
 
                 Some(num)
             }
@@ -466,27 +446,18 @@ impl DAQmxDataIndex {
         let mut buf: [u8; 4] = [0; 4];
         r.read_exact(&mut buf)?;
 
-        let data_type = match endianness {
-            Big => u32::from_be_bytes(buf),
-            Little => u32::from_le_bytes(buf),
-        };
+        let data_type = to_u32!(buf, endianness);
 
         if data_type != 0xFFFFFFFF {
             return Err(InvalidDAQmxDataIndex());
         }
 
         r.read_exact(&mut buf)?;
-        let array_dimension = match endianness {
-            Big => u32::from_be_bytes(buf),
-            Little => u32::from_le_bytes(buf),
-        };
+        let array_dimension = to_u32!(buf, endianness);
 
         let mut buf: [u8; 8] = [0; 8];
         r.read_exact(&mut buf)?;
-        let number_of_values = match endianness {
-            Big => u64::from_be_bytes(buf),
-            Little => u64::from_le_bytes(buf),
-        };
+        let number_of_values = to_u64!(buf, endianness);
 
         let mut buf: [u8; 4] = [0; 4];
 
@@ -494,10 +465,7 @@ impl DAQmxDataIndex {
         let format_changing_vec: Option<Vec<FormatChangingScaler>> = None;
         if is_format_changing {
             r.read_exact(&mut buf)?;
-            let changing_vec_size = match endianness {
-                Big => u32::from_be_bytes(buf),
-                Little => u32::from_le_bytes(buf),
-            };
+            let changing_vec_size = to_u32!(buf, endianness);
 
             let mut vec: Vec<FormatChangingScaler> = vec![];
             for _ in 0..changing_vec_size {
@@ -506,16 +474,10 @@ impl DAQmxDataIndex {
         }
 
         r.read_exact(&mut buf)?;
-        let vec_size = match endianness {
-            Big => u32::from_be_bytes(buf),
-            Little => u32::from_le_bytes(buf),
-        };
+        let vec_size = to_u32!(buf, endianness);
 
         r.read_exact(&mut buf)?;
-        let elements_in_vec = match endianness {
-            Big => u32::from_be_bytes(buf),
-            Little => u32::from_le_bytes(buf),
-        };
+        let elements_in_vec = to_u32!(buf, endianness);
 
         return Ok(DAQmxDataIndex {
             data_type: TdmsDataType::DAQmxRawData,
@@ -546,36 +508,21 @@ impl FormatChangingScaler {
         let mut buf: [u8; 4] = [0; 4];
         r.read_exact(&mut buf)?;
 
-        let data_type = match endianness {
-            Big => i32::from_be_bytes(buf),
-            Little => i32::from_le_bytes(buf),
-        };
+        let data_type = to_i32!(buf, endianness);
 
         let data_type = TdmsDataType::try_from(data_type)?;
 
         r.read_exact(&mut buf)?;
-        let raw_buffer_index = match endianness {
-            Little => u32::from_le_bytes(buf),
-            Big => u32::from_be_bytes(buf),
-        };
+        let raw_buffer_index = to_u32!(buf, endianness);
 
         r.read_exact(&mut buf)?;
-        let raw_byte_offset = match endianness {
-            Little => u32::from_le_bytes(buf),
-            Big => u32::from_be_bytes(buf),
-        };
+        let raw_byte_offset = to_u32!(buf, endianness);
 
         r.read_exact(&mut buf)?;
-        let sample_format_bitmap = match endianness {
-            Little => u32::from_le_bytes(buf),
-            Big => u32::from_be_bytes(buf),
-        };
+        let sample_format_bitmap = to_u32!(buf, endianness);
 
         r.read_exact(&mut buf)?;
-        let scale_id = match endianness {
-            Little => u32::from_le_bytes(buf),
-            Big => u32::from_be_bytes(buf),
-        };
+        let scale_id = to_u32!(buf, endianness);
 
         return Ok(FormatChangingScaler {
             data_type,
@@ -606,10 +553,7 @@ impl MetadataProperty {
         let mut buf: [u8; 4] = [0; 4];
         r.read_exact(&mut buf)?;
 
-        let length: u32 = match endianness {
-            Little => u32::from_le_bytes(buf),
-            Big => u32::from_be_bytes(buf),
-        };
+        let length: u32 = to_u32!(buf, endianness);
 
         // must be a vec due to variable length
         let length = match usize::try_from(length) {
@@ -637,10 +581,7 @@ impl MetadataProperty {
 
         // now we check the data type
         r.read_exact(&mut buf)?;
-        let data_type = match endianness {
-            Big => i32::from_be_bytes(buf),
-            Little => i32::from_le_bytes(buf),
-        };
+        let data_type = to_i32!(buf, endianness);
 
         let data_type = TdmsDataType::try_from(data_type)?;
         let value = TDMSValue::from_reader(endianness, data_type, r)?;
@@ -658,4 +599,34 @@ fn rem_first_and_last(value: &str) -> &str {
     chars.next();
     chars.next_back();
     chars.as_str()
+}
+
+#[macro_export]
+macro_rules! to_u32 {
+    ( $x:ident, $t:ident ) => {
+        match $t {
+            Little => u32::from_le_bytes($x),
+            Big => u32::from_be_bytes($x),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! to_i32 {
+    ( $x:ident, $t:ident ) => {
+        match $t {
+            Little => i32::from_le_bytes($x),
+            Big => i32::from_be_bytes($x),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! to_u64 {
+    ( $x:ident, $t:ident ) => {
+        match $t {
+            Little => u64::from_le_bytes($x),
+            Big => u64::from_be_bytes($x),
+        }
+    };
 }
