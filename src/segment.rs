@@ -42,8 +42,8 @@ pub type Group = String;
 pub type Channel = String;
 
 impl Segment {
-    /// New expects a reader who's cursor position is at the start of a new TDMS segment.
-    /// You will see an InvalidSegment error return if the file position isn't correct as the first
+    /// `new` expects a reader who's cursor position is at the start of a new TDMS segment.
+    /// You will see an InvalidSegment error return if the reader position isn't correct as the first
     /// byte read will not be the correct tag for a segment.
     pub fn new<R: Read + Seek>(r: &mut R, metadata_only: bool) -> Result<Self, TdmsError> {
         let start_pos = r.stream_position()?;
