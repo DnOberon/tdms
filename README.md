@@ -14,7 +14,7 @@
 ## Usage
 
 ```rust
-let file = match TDMSFile::from_path("data/big_endian.tdms", false) {
+let file = match TDMSFile::from_path(Path::new("data/big_endian.tdms"), false) {
     Ok(f) => f,
     Err(e) => panic!("{:?}", e),
 };
