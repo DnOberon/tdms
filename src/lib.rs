@@ -3,7 +3,7 @@
 //! More information about the TDMS file format can be found here: <https://www.ni.com/en-us/support/documentation/supplemental/07/tdms-file-format-internal-structure.html>
 use std::fs;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 pub mod error;
@@ -29,18 +29,19 @@ impl TDMSFile {
     /// the entire file into working memory.
     pub fn from_path(path: &str, metadata_only: bool) -> Result<Self, TdmsError> {
         let metadata = fs::metadata(Path::new(path))?;
-        let mut file = File::open(Path::new(path))?;
+        let file = File::open(Path::new(path))?;
+        let mut reader = BufReader::with_capacity(4096, file);
         let mut segments: Vec<Segment> = vec![];
 
         loop {
-            let segment = Segment::new(&mut file, metadata_only)?;
+            let segment = Segment::new(&mut reader, metadata_only)?;
 
             if segment.end_pos == metadata.len() {
                 segments.push(segment);
                 break;
             }
 
-            file.seek(SeekFrom::Start(segment.end_pos))?;
+            reader.seek(SeekFrom::Start(segment.end_pos))?;
             segments.push(segment);
         }
 
