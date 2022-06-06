@@ -27,9 +27,9 @@ pub struct TDMSFile {
 impl TDMSFile {
     /// `from_path` expects a path and whether or not to read only the metadata of each segment vs
     /// the entire file into working memory.
-    pub fn from_path(path: &str, metadata_only: bool) -> Result<Self, TdmsError> {
-        let metadata = fs::metadata(Path::new(path))?;
-        let file = File::open(Path::new(path))?;
+    pub fn from_path(path: &Path, metadata_only: bool) -> Result<Self, TdmsError> {
+        let metadata = fs::metadata(path)?;
+        let file = File::open(path)?;
         let mut reader = BufReader::with_capacity(4096, file);
         let mut segments: Vec<Segment> = vec![];
 

@@ -1,11 +1,12 @@
 extern crate tdms;
 
+use std::path::Path;
 use tdms::TDMSFile;
 
 fn main() {
     // open and parse the TDMS file, passing in metadata false will mean the entire file is
     // read into memory, not just the metadata
-    let file = match TDMSFile::from_path("data/standard.tdms", false) {
+    let file = match TDMSFile::from_path(Path::new("data/standard.tdms"), false) {
         Ok(f) => f,
         Err(e) => panic!("{:?}", e),
     };

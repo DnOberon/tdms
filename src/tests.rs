@@ -22,7 +22,7 @@ fn can_read_lead_in() {
 
 #[test]
 fn can_read_all_segments() {
-    let file = match TDMSFile::from_path("data/standard.tdms", false) {
+    let file = match TDMSFile::from_path(Path::new("data/standard.tdms"), false) {
         Ok(f) => f,
         Err(e) => panic!("{:?}", e),
     };
@@ -32,7 +32,7 @@ fn can_read_all_segments() {
 
 #[test]
 fn can_read_segments_data_after() {
-    let mut file = match TDMSFile::from_path("data/standard.tdms", true) {
+    let mut file = match TDMSFile::from_path(Path::new("data/standard.tdms"), true) {
         Ok(f) => f,
         Err(e) => panic!("{:?}", e),
     };
@@ -55,7 +55,7 @@ fn can_read_segments_data_after() {
 
 #[test]
 fn can_read_segments_data_after_reader() {
-    let mut file = match TDMSFile::from_path("data/standard.tdms", true) {
+    let mut file = match TDMSFile::from_path(Path::new("data/standard.tdms"), true) {
         Ok(f) => f,
         Err(e) => panic!("{:?}", e),
     };
@@ -73,7 +73,7 @@ fn can_read_segments_data_after_reader() {
 
 #[test]
 fn can_read_all_groups_from_segment() {
-    let file = match TDMSFile::from_path("data/standard.tdms", false) {
+    let file = match TDMSFile::from_path(Path::new("data/standard.tdms"), false) {
         Ok(f) => f,
         Err(e) => panic!("{:?}", e),
     };
@@ -83,7 +83,7 @@ fn can_read_all_groups_from_segment() {
 
 #[test]
 fn can_read_all_segments_be() {
-    let file = match TDMSFile::from_path("data/big_endian.tdms", false) {
+    let file = match TDMSFile::from_path(Path::new("data/big_endian.tdms"), false) {
         Ok(f) => f,
         Err(e) => panic!("{:?}", e),
     };
@@ -93,7 +93,7 @@ fn can_read_all_segments_be() {
 
 #[test]
 fn can_read_all_segments_raw() {
-    let file = match TDMSFile::from_path("data/raw.tdms", false) {
+    let file = match TDMSFile::from_path(Path::new("data/raw.tdms"), false) {
         Ok(f) => f,
         Err(e) => panic!("{:?}", e),
     };
