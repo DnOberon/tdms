@@ -24,7 +24,7 @@ pub enum Endianness {
     Big,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// `Segment` represents an entire TDMS File Segment and potentially its raw data.
 pub struct Segment {
     pub lead_in: LeadIn,
@@ -32,13 +32,13 @@ pub struct Segment {
     pub raw_data: Option<Vec<u8>>,
     pub start_pos: u64,
     pub end_pos: u64,
-    pub groups: IndexMap<Group, Option<IndexSet<Channel>>>,
+    pub groups: IndexMap<GroupPath, Option<IndexSet<ChannelPath>>>,
 }
 
-/// Group is a simple alias to allow our function signatures to be more telling
-pub type Group = String;
-/// Channel is a simple alias to allow our function signatures to be more telling
-pub type Channel = String;
+/// GroupPath is a simple alias to allow our function signatures to be more telling
+pub type GroupPath = String;
+/// ChannelPath is a simple alias to allow our function signatures to be more telling
+pub type ChannelPath = String;
 
 impl Segment {
     /// `new` expects a reader who's cursor position is at the start of a new TDMS segment.
@@ -80,8 +80,8 @@ impl Segment {
         // somehow building this list dynamically as we read the file but honestly the performance
         // hit according to benches was minimal and this makes a cleaner set of function boundaries
         // and lets us get away from passing in mutable state all over the place
-        let mut groups: IndexMap<Group, Option<IndexSet<Channel>>> =
-            IndexMap::<Group, Option<IndexSet<Channel>>>::new();
+        let mut groups: IndexMap<GroupPath, Option<IndexSet<ChannelPath>>> =
+            IndexMap::<GroupPath, Option<IndexSet<ChannelPath>>>::new();
 
         match &metadata {
             Some(metadata) => {
@@ -197,7 +197,7 @@ impl Segment {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// `LeadIn` represents the 28 bytes representing the lead in to a TDMS Segment.
 pub struct LeadIn {
     pub tag: [u8; 4],
@@ -262,7 +262,7 @@ impl LeadIn {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// `Metadata` represents the collection of metadata objects for a segment in the order in which they
 /// were read
 pub struct Metadata {
@@ -270,7 +270,7 @@ pub struct Metadata {
     pub objects: Vec<MetadataObject>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// `MetadataObject` represents information that is not raw data associated with the segment. May
 /// contain DAQmx raw data index, a standard index, or nothing at all.
 pub struct MetadataObject {
@@ -379,7 +379,7 @@ impl Metadata {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RawDataIndex {
     pub data_type: TdmsDataType,
     pub array_dimension: u32, // should only ever be 1
@@ -426,7 +426,7 @@ impl RawDataIndex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DAQmxDataIndex {
     pub data_type: TdmsDataType,
     pub array_dimension: u32, // should only ever be 1
@@ -491,7 +491,7 @@ impl DAQmxDataIndex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FormatChangingScaler {
     pub data_type: TdmsDataType,
     pub raw_buffer_index: u32,
@@ -534,7 +534,7 @@ impl FormatChangingScaler {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// `MetadataProperty` is a key/value pair associated with a `MetadataObject`
 pub struct MetadataProperty {
     pub name: String,

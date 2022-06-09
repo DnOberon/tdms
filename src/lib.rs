@@ -7,6 +7,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 pub mod error;
+use crate::channel::Channel;
 use crate::TdmsError::{
     General, InvalidDAQmxDataIndex, InvalidSegment, StringConversionError, UnknownDataType,
 };
@@ -14,17 +15,19 @@ pub use error::TdmsError;
 use segment::Endianness::{Big, Little};
 use segment::{Endianness, Segment};
 
+pub mod channel;
 pub mod segment;
 #[cfg(test)]
 mod tests;
 
 #[derive(Debug)]
 /// `TDDMSFile` represents all `segments` of a TDMS file in the order in which they were read.
-pub struct TDMSFile {
+pub struct TDMSFile<R: Read + Seek> {
     pub segments: Vec<Segment>,
+    reader: BufReader<R>,
 }
 
-impl TDMSFile {
+impl TDMSFile<File> {
     /// `from_path` expects a path and whether or not to read only the metadata of each segment vs
     /// the entire file into working memory.
     pub fn from_path(path: &Path, metadata_only: bool) -> Result<Self, TdmsError> {
@@ -45,7 +48,17 @@ impl TDMSFile {
             segments.push(segment);
         }
 
-        return Ok(TDMSFile { segments });
+        return Ok(TDMSFile { segments, reader });
+    }
+
+    pub fn channel(&self, path: String) -> Result<Channel, TdmsError> {
+        let mut vec: Vec<&Segment> = vec![];
+
+        // TODO: actually iterate through and build a set of segments that match
+        for segment in &self.segments {
+            vec.push(&segment)
+        }
+        return Channel::new(vec, path);
     }
 }
 
@@ -118,7 +131,7 @@ impl TryFrom<i32> for TdmsDataType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// `TDMSValue` represents a single value read from a TDMS file. This contains information on the
 /// data type and the endianness of the value if numeric. This is typically used only by segment
 /// and in the metadata properties, as using these for raw values is not good for performance.
