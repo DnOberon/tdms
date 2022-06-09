@@ -7,17 +7,33 @@
 ### Current Features
 - Read both standard and big endian encoded files
 - Read files with DAQmx data and data indices
-- Read all segments in file, along with their groups and channels
-- Read all raw data contained in all segments in file
+- Read all segments in file, along with their groups and channels (per segment only)
+- Read all raw data contained in all segments in file (as a `Vec<u8>` only at the present time)
 
 
 ## Usage
 
 ```rust
-let file = match TDMSFile::from_path(Path::new("data/big_endian.tdms"), false) {
-    Ok(f) => f,
-    Err(e) => panic!("{:?}", e),
-};
+extern crate tdms;
+
+use std::path::Path;
+use tdms::TDMSFile;
+
+fn main() {
+    // open and parse the TDMS file, passing in metadata false will mean the entire file is
+    // read into memory, not just the metadata
+    let file = match TDMSFile::from_path(Path::new("data/standard.tdms"), false) {
+        Ok(f) => f,
+        Err(e) => panic!("{:?}", e),
+    };
+
+    // TDMS files record their data in segments - each can potentially contain metadata and/or raw
+    // data
+    for segment in file.segments {
+        println!("{:?}", segment.metadata)
+    }
+}
+
 ```
 
 ## Contributing
