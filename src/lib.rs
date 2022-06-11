@@ -1,6 +1,8 @@
 //! A Rust library for reading LabVIEW TDMS files.
 //!
 //! More information about the TDMS file format can be found here: <https://www.ni.com/en-us/support/documentation/supplemental/07/tdms-file-format-internal-structure.html>
+use indexmap::IndexSet;
+use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
@@ -8,6 +10,7 @@ use std::path::Path;
 
 pub mod error;
 use crate::channel::Channel;
+use crate::segment::ChannelPath;
 use crate::TdmsError::{
     General, InvalidDAQmxDataIndex, InvalidSegment, StringConversionError, UnknownDataType,
 };
@@ -51,14 +54,84 @@ impl TDMSFile<File> {
         return Ok(TDMSFile { segments, reader });
     }
 
-    pub fn channel(&self, path: String) -> Result<Channel, TdmsError> {
-        let mut vec: Vec<&Segment> = vec![];
+    /// groups returns all possible groups throughout the file
+    pub fn groups(&self) -> Vec<String> {
+        let mut map: HashSet<String> = HashSet::new();
 
-        // TODO: actually iterate through and build a set of segments that match
         for segment in &self.segments {
-            vec.push(&segment)
+            for (group, _) in &segment.groups {
+                map.insert(String::from(group));
+            }
         }
-        return Channel::new(vec, path);
+
+        return Vec::from_iter(map);
+    }
+
+    pub fn channels(&self, group_path: &str) -> Vec<String> {
+        let mut map: HashSet<String> = HashSet::new();
+
+        for segment in &self.segments {
+            let channel_map = match segment.groups.get(group_path) {
+                Some(m) => m,
+                None => &None,
+            };
+
+            let channel_map = match channel_map {
+                None => continue,
+                Some(m) => m,
+            };
+
+            for channel in channel_map {
+                map.insert(String::from(channel));
+            }
+        }
+
+        return Vec::from_iter(map);
+    }
+
+    pub fn channel(&self, group_path: &str, path: &str) -> Result<Channel, TdmsError> {
+        let mut vec: Vec<&Segment> = vec![];
+        let mut channel_in_segment: bool = false;
+
+        for segment in &self.segments {
+            match segment.groups.get(group_path) {
+                None => {
+                    if !segment.has_new_obj_list() && channel_in_segment {
+                        vec.push(&segment)
+                    } else {
+                        channel_in_segment = false
+                    }
+                }
+                Some(channels) => match channels {
+                    None => {
+                        if !segment.has_new_obj_list() && channel_in_segment {
+                            vec.push(&segment)
+                        } else {
+                            channel_in_segment = false
+                        }
+                    }
+                    Some(channels) => {
+                        let channel = channels.get(path);
+
+                        match channel {
+                            None => {
+                                if !segment.has_new_obj_list() && channel_in_segment {
+                                    vec.push(&segment)
+                                } else {
+                                    channel_in_segment = false
+                                }
+                            }
+                            Some(_) => {
+                                vec.push(&segment);
+                                channel_in_segment = true;
+                            }
+                        }
+                    }
+                },
+            }
+        }
+
+        return Channel::new(vec, group_path.to_string(), path.to_string());
     }
 }
 

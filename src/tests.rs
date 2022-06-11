@@ -1,5 +1,5 @@
 use crate::segment::Segment;
-use crate::TDMSFile;
+use crate::{Channel, TDMSFile, TdmsError};
 use std::fs::File;
 use std::path::Path;
 
@@ -99,4 +99,28 @@ fn can_read_all_segments_raw() {
     };
 
     assert_eq!(file.segments.len(), 3);
+}
+
+#[test]
+fn can_read_groups_channels() {
+    let file = match TDMSFile::from_path(Path::new("data/standard.tdms"), false) {
+        Ok(f) => f,
+        Err(e) => panic!("{:?}", e),
+    };
+
+    let groups = file.groups();
+    assert!(groups.len() > 0);
+
+    for group in groups {
+        let channels = file.channels(&group);
+
+        for channel in channels {
+            match file.channel(&group, &channel) {
+                Ok(c) => c,
+                Err(e) => panic!("{:?}", e),
+            };
+        }
+    }
+
+    assert_eq!(file.segments.len(), 2);
 }

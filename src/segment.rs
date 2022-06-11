@@ -90,23 +90,23 @@ impl Segment {
                     let paths: Vec<&str> = path.split("/").collect();
 
                     if paths.len() >= 2 && paths[1] != "" {
-                        if !groups.contains_key(rem_first_and_last(paths[1])) {
-                            let _ = groups.insert(rem_first_and_last(paths[1]).to_string(), None);
+                        if !groups.contains_key(rem_quotes(paths[1])) {
+                            let _ = groups.insert(rem_quotes(paths[1]).to_string(), None);
                         }
                     }
 
                     if paths.len() >= 3 && paths[2] != "" {
-                        let map = groups.get_mut(rem_first_and_last(paths[1]));
+                        let map = groups.get_mut(rem_quotes(paths[1]));
 
                         match map {
                             Some(map) => match map {
                                 Some(map) => {
-                                    map.insert(rem_first_and_last(paths[2]).to_string());
+                                    map.insert(rem_quotes(paths[2]).to_string());
                                 }
                                 None => {
                                     let _ = groups.insert(
-                                        rem_first_and_last(paths[1]).to_string(),
-                                        Some(indexset! {rem_first_and_last(paths[2]).to_string()}),
+                                        rem_quotes(paths[1]).to_string(),
+                                        Some(indexset! {rem_quotes(paths[2]).to_string()}),
                                     );
                                 }
                             },
@@ -156,15 +156,15 @@ impl Segment {
     /// `all_data_reader` returns a Take containing the raw data for the segment. This function assumes
     /// that the reader passed in is the ORIGINAL reader, or another instance thereof.
     pub fn all_data_reader<R: Read + Seek>(&mut self, mut r: R) -> Result<Take<R>, TdmsError> {
-        match r.seek(SeekFrom::Start(
+        return match r.seek(SeekFrom::Start(
             self.start_pos + self.lead_in.raw_data_offset,
         )) {
             Ok(_) => {
                 let take = r.take(self.lead_in.next_segment_offset - self.lead_in.raw_data_offset);
-                return Ok(take);
+                Ok(take)
             }
-            Err(e) => return Err(ReadError(e)),
-        }
+            Err(e) => Err(ReadError(e)),
+        };
     }
 
     /// this function is not accurate unless the lead in portion of the segment has been read
@@ -594,11 +594,30 @@ impl MetadataProperty {
     }
 }
 
-fn rem_first_and_last(value: &str) -> &str {
-    let mut chars = value.chars();
-    chars.next();
-    chars.next_back();
-    chars.as_str()
+fn rem_quotes(value: &str) -> &str {
+    let mut original = value.chars();
+    let mut chars = value.clone().chars().peekable();
+
+    match chars.peek() {
+        None => (),
+        Some(first) => {
+            if first.to_string() == "'" {
+                original.next();
+            }
+        }
+    }
+
+    let mut reversed = chars.rev().peekable();
+    match reversed.peek() {
+        None => (),
+        Some(last) => {
+            if last.to_string() == "'" {
+                original.next_back();
+            }
+        }
+    }
+
+    original.as_str()
 }
 
 #[macro_export]
