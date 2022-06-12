@@ -1,10 +1,10 @@
+use crate::data_type::{TDMSValue, TdmsDataType};
 use crate::TdmsError::ReadError;
 use crate::{to_i32, to_u32, to_u64};
 use crate::{
-    Big, General, InvalidDAQmxDataIndex, InvalidSegment, Little, StringConversionError, TDMSValue,
-    TdmsDataType, TdmsError,
+    Big, General, InvalidDAQmxDataIndex, InvalidSegment, Little, StringConversionError, TdmsError,
 };
-use indexmap::{indexset, IndexMap, IndexSet};
+use indexmap::{indexmap, indexset, IndexMap, IndexSet};
 use std::io::{Read, Seek, SeekFrom, Take};
 
 /// These are bitmasks for the Table of Contents byte.
@@ -32,7 +32,7 @@ pub struct Segment {
     pub raw_data: Option<Vec<u8>>,
     pub start_pos: u64,
     pub end_pos: u64,
-    pub groups: IndexMap<GroupPath, Option<IndexSet<ChannelPath>>>,
+    pub groups: IndexMap<GroupPath, Option<IndexMap<ChannelPath, TdmsDataType>>>,
 }
 
 /// GroupPath is a simple alias to allow our function signatures to be more telling
@@ -80,12 +80,23 @@ impl Segment {
         // somehow building this list dynamically as we read the file but honestly the performance
         // hit according to benches was minimal and this makes a cleaner set of function boundaries
         // and lets us get away from passing in mutable state all over the place
-        let mut groups: IndexMap<GroupPath, Option<IndexSet<ChannelPath>>> =
-            IndexMap::<GroupPath, Option<IndexSet<ChannelPath>>>::new();
+        let mut groups: IndexMap<GroupPath, Option<IndexMap<ChannelPath, TdmsDataType>>> =
+            IndexMap::<GroupPath, Option<IndexMap<ChannelPath, TdmsDataType>>>::new();
 
         match &metadata {
             Some(metadata) => {
                 for obj in &metadata.objects {
+                    let mut data_type: TdmsDataType = TdmsDataType::Void;
+                    match &obj.raw_data_index {
+                        None => {}
+                        Some(index) => data_type = index.data_type,
+                    }
+
+                    match &obj.daqmx_data_index {
+                        None => {}
+                        Some(index) => data_type = index.data_type,
+                    }
+
                     let path = obj.object_path.clone();
                     let paths: Vec<&str> = path.split("/").collect();
 
@@ -100,15 +111,21 @@ impl Segment {
 
                         match map {
                             Some(map) => match map {
-                                Some(map) => {
-                                    map.insert(rem_quotes(paths[2]).to_string());
-                                }
-                                None => {
-                                    let _ = groups.insert(
-                                        rem_quotes(paths[1]).to_string(),
-                                        Some(indexset! {rem_quotes(paths[2]).to_string()}),
-                                    );
-                                }
+                                Some(map) => match data_type {
+                                    TdmsDataType::Void => {}
+                                    _ => {
+                                        map.insert(rem_quotes(paths[2]).to_string(), data_type);
+                                    }
+                                },
+                                None => match data_type {
+                                    TdmsDataType::Void => {}
+                                    _ => {
+                                        groups.insert(
+                                            rem_quotes(paths[1]).to_string(),
+                                            Some(indexmap! {rem_quotes(paths[2]).to_string() => data_type}),
+                                        );
+                                    }
+                                },
                             },
                             None => (),
                         }

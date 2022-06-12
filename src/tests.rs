@@ -114,13 +114,11 @@ fn can_read_groups_channels() {
     for group in groups {
         let channels = file.channels(&group);
 
-        for channel in channels {
-            let full_channel = match file.channel(&group, &channel) {
+        for (channel, data_type) in channels {
+            let full_channel = match file.channel_double_float(&group, &channel) {
                 Ok(c) => c,
                 Err(e) => panic!("{:?}", e),
             };
-
-            println!("{:?}", full_channel);
         }
     }
 
