@@ -1,6 +1,5 @@
 use crate::segment::{ChannelPath, GroupPath};
 use crate::{General, Segment, TdmsError};
-use std::fs::File;
 use std::io::{BufReader, Read, Seek};
 use std::marker::PhantomData;
 

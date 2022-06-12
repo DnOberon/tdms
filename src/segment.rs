@@ -4,7 +4,7 @@ use crate::{to_i32, to_u32, to_u64};
 use crate::{
     Big, General, InvalidDAQmxDataIndex, InvalidSegment, Little, StringConversionError, TdmsError,
 };
-use indexmap::{indexmap, indexset, IndexMap, IndexSet};
+use indexmap::{indexmap, IndexMap};
 use std::io::{Read, Seek, SeekFrom, Take};
 
 /// These are bitmasks for the Table of Contents byte.
