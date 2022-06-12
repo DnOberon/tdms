@@ -1,5 +1,5 @@
 use crate::segment::Segment;
-use crate::{Channel, TDMSFile, TdmsError};
+use crate::TDMSFile;
 use std::fs::File;
 use std::path::Path;
 
@@ -115,10 +115,12 @@ fn can_read_groups_channels() {
         let channels = file.channels(&group);
 
         for channel in channels {
-            match file.channel(&group, &channel) {
+            let full_channel = match file.channel(&group, &channel) {
                 Ok(c) => c,
                 Err(e) => panic!("{:?}", e),
             };
+
+            println!("{:?}", full_channel);
         }
     }
 

@@ -1,7 +1,6 @@
 //! A Rust library for reading LabVIEW TDMS files.
 //!
 //! More information about the TDMS file format can be found here: <https://www.ni.com/en-us/support/documentation/supplemental/07/tdms-file-format-internal-structure.html>
-use indexmap::IndexSet;
 use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
@@ -10,7 +9,6 @@ use std::path::Path;
 
 pub mod error;
 use crate::channel::Channel;
-use crate::segment::ChannelPath;
 use crate::TdmsError::{
     General, InvalidDAQmxDataIndex, InvalidSegment, StringConversionError, UnknownDataType,
 };
@@ -53,7 +51,9 @@ impl TDMSFile<File> {
 
         return Ok(TDMSFile { segments, reader });
     }
+}
 
+impl<R: Read + Seek> TDMSFile<R> {
     /// groups returns all possible groups throughout the file
     pub fn groups(&self) -> Vec<String> {
         let mut map: HashSet<String> = HashSet::new();
@@ -89,7 +89,7 @@ impl TDMSFile<File> {
         return Vec::from_iter(map);
     }
 
-    pub fn channel(&self, group_path: &str, path: &str) -> Result<Channel, TdmsError> {
+    pub fn channel(&self, group_path: &str, path: &str) -> Result<Channel<R>, TdmsError> {
         let mut vec: Vec<&Segment> = vec![];
         let mut channel_in_segment: bool = false;
 
@@ -131,7 +131,7 @@ impl TDMSFile<File> {
             }
         }
 
-        return Channel::new(vec, group_path.to_string(), path.to_string());
+        return Channel::new(vec, group_path.to_string(), path.to_string(), &self.reader);
     }
 }
 

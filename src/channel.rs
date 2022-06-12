@@ -1,20 +1,25 @@
-use crate::segment::{ChannelPath, DAQmxDataIndex, GroupPath, RawDataIndex};
+use crate::segment::{ChannelPath, GroupPath};
 use crate::{General, Segment, TdmsError};
+use std::fs::File;
+use std::io::{BufReader, Read, Seek};
 
-#[derive(Debug, Clone)]
-pub struct Channel<'a> {
+#[derive(Debug)]
+pub struct Channel<'a, R: Read + Seek> {
     group_path: GroupPath,
     path: ChannelPath,
     segments: Vec<&'a Segment>,
     bytes_read: u64,
     current_segment: &'a Segment,
+    current_segment_index: usize,
+    reader: &'a BufReader<R>,
 }
 
-impl<'a> Channel<'a> {
+impl<'a, R: Read + Seek> Channel<'a, R> {
     pub fn new(
         segments: Vec<&'a Segment>,
         group_path: String,
         path: String,
+        reader: &'a BufReader<R>,
     ) -> Result<Self, TdmsError> {
         if segments.len() <= 0 {
             return Err(General(String::from(
@@ -30,6 +35,8 @@ impl<'a> Channel<'a> {
             segments,
             bytes_read: 0,
             current_segment,
+            current_segment_index: 0,
+            reader,
         });
     }
 }
