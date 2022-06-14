@@ -1,31 +1,31 @@
 use crate::{Big, Endianness, General, Little, TdmsError, UnknownDataType};
 use std::io::{Read, Seek};
 
-/// Represents the potential TDMS data types .
+/// Represents the potential TDMS data types. Contained value is size in bytes if applicable
 #[derive(Debug, Copy, Clone)]
 pub enum TdmsDataType {
     Void,
-    I8,
-    I16,
-    I32,
-    I64,
-    U8,
-    U16,
-    U32,
-    U64,
-    SingleFloat,
-    DoubleFloat,
-    ExtendedFloat,
-    SingleFloatWithUnit = 0x19,
-    DoubleFloatWithUnit = 0x1a,
-    ExtendedFloatWithUnit = 0x1b,
-    String = 0x20,
-    Boolean = 0x21,
-    TimeStamp = 0x44,
-    FixedPoint = 0x4F,
-    ComplexSingleFloat = 0x08000c,
-    ComplexDoubleFloat = 0x10000d,
-    DAQmxRawData = 0xFFFFFFFF,
+    I8(usize),
+    I16(usize),
+    I32(usize),
+    I64(usize),
+    U8(usize),
+    U16(usize),
+    U32(usize),
+    U64(usize),
+    SingleFloat(usize),
+    DoubleFloat(usize),
+    ExtendedFloat(usize),
+    SingleFloatWithUnit(usize),
+    DoubleFloatWithUnit(usize),
+    ExtendedFloatWithUnit(usize),
+    String,
+    Boolean(usize),
+    TimeStamp(usize),
+    FixedPoint,
+    ComplexSingleFloat(usize),
+    ComplexDoubleFloat(usize),
+    DAQmxRawData,
 }
 
 impl TryFrom<i32> for TdmsDataType {
@@ -33,38 +33,28 @@ impl TryFrom<i32> for TdmsDataType {
 
     fn try_from(v: i32) -> Result<Self, TdmsError> {
         match v {
-            x if x == TdmsDataType::Void as i32 => Ok(TdmsDataType::Void),
-            x if x == TdmsDataType::I8 as i32 => Ok(TdmsDataType::I8),
-            x if x == TdmsDataType::I16 as i32 => Ok(TdmsDataType::I16),
-            x if x == TdmsDataType::I32 as i32 => Ok(TdmsDataType::I32),
-            x if x == TdmsDataType::I64 as i32 => Ok(TdmsDataType::I64),
-            x if x == TdmsDataType::U8 as i32 => Ok(TdmsDataType::U8),
-            x if x == TdmsDataType::U16 as i32 => Ok(TdmsDataType::U16),
-            x if x == TdmsDataType::U32 as i32 => Ok(TdmsDataType::U32),
-            x if x == TdmsDataType::U64 as i32 => Ok(TdmsDataType::U64),
-            x if x == TdmsDataType::SingleFloat as i32 => Ok(TdmsDataType::SingleFloat),
-            x if x == TdmsDataType::DoubleFloat as i32 => Ok(TdmsDataType::DoubleFloat),
-            x if x == TdmsDataType::ExtendedFloat as i32 => Ok(TdmsDataType::ExtendedFloat),
-            x if x == TdmsDataType::SingleFloatWithUnit as i32 => {
-                Ok(TdmsDataType::SingleFloatWithUnit)
-            }
-            x if x == TdmsDataType::DoubleFloatWithUnit as i32 => {
-                Ok(TdmsDataType::DoubleFloatWithUnit)
-            }
-            x if x == TdmsDataType::ExtendedFloatWithUnit as i32 => {
-                Ok(TdmsDataType::ExtendedFloatWithUnit)
-            }
-            x if x == TdmsDataType::String as i32 => Ok(TdmsDataType::String),
-            x if x == TdmsDataType::Boolean as i32 => Ok(TdmsDataType::Boolean),
-            x if x == TdmsDataType::TimeStamp as i32 => Ok(TdmsDataType::TimeStamp),
-            x if x == TdmsDataType::FixedPoint as i32 => Ok(TdmsDataType::FixedPoint),
-            x if x == TdmsDataType::ComplexSingleFloat as i32 => {
-                Ok(TdmsDataType::ComplexSingleFloat)
-            }
-            x if x == TdmsDataType::ComplexDoubleFloat as i32 => {
-                Ok(TdmsDataType::ComplexDoubleFloat)
-            }
-            x if x == TdmsDataType::DAQmxRawData as i32 => Ok(TdmsDataType::DAQmxRawData),
+            x if x == 0 => Ok(TdmsDataType::Void),
+            x if x == 1 => Ok(TdmsDataType::I8(1)),
+            x if x == 2 => Ok(TdmsDataType::I16(2)),
+            x if x == 3 => Ok(TdmsDataType::I32(4)),
+            x if x == 4 => Ok(TdmsDataType::I64(8)),
+            x if x == 5 => Ok(TdmsDataType::U8(1)),
+            x if x == 6 => Ok(TdmsDataType::U16(2)),
+            x if x == 7 => Ok(TdmsDataType::U32(4)),
+            x if x == 8 => Ok(TdmsDataType::U64(8)),
+            x if x == 9 => Ok(TdmsDataType::SingleFloat(4)),
+            x if x == 10 => Ok(TdmsDataType::DoubleFloat(8)),
+            x if x == 11 => Ok(TdmsDataType::ExtendedFloat(10)),
+            x if x == 0x19 => Ok(TdmsDataType::SingleFloatWithUnit(4)),
+            x if x == 0x1a => Ok(TdmsDataType::DoubleFloatWithUnit(8)),
+            x if x == 0x1b => Ok(TdmsDataType::ExtendedFloatWithUnit(10)),
+            x if x == 0x20 => Ok(TdmsDataType::String),
+            x if x == 0x21 => Ok(TdmsDataType::Boolean(1)),
+            x if x == 0x44 => Ok(TdmsDataType::TimeStamp(16)),
+            x if x == 0x4f => Ok(TdmsDataType::FixedPoint),
+            x if x == 0x08000c => Ok(TdmsDataType::ComplexSingleFloat(4)),
+            x if x == 0x10000d => Ok(TdmsDataType::ComplexDoubleFloat(8)),
+            x if x == -1 => Ok(TdmsDataType::DAQmxRawData), // 0xFFFFFFFF equivalent
             _ => Err(UnknownDataType()),
         }
     }
@@ -94,7 +84,7 @@ impl TDMSValue {
                 endianness,
                 value: None,
             }),
-            TdmsDataType::I8 => {
+            TdmsDataType::I8(_) => {
                 let mut buf: [u8; 1] = [0; 1];
                 r.read_exact(&mut buf)?;
 
@@ -104,7 +94,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::I16 => {
+            TdmsDataType::I16(_) => {
                 let mut buf: [u8; 2] = [0; 2];
                 r.read_exact(&mut buf)?;
 
@@ -114,7 +104,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::I32 => {
+            TdmsDataType::I32(_) => {
                 let mut buf: [u8; 4] = [0; 4];
                 r.read_exact(&mut buf)?;
 
@@ -124,7 +114,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::I64 => {
+            TdmsDataType::I64(_) => {
                 let mut buf: [u8; 8] = [0; 8];
                 r.read_exact(&mut buf)?;
 
@@ -134,7 +124,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::U8 => {
+            TdmsDataType::U8(_) => {
                 let mut buf: [u8; 1] = [0; 1];
                 r.read_exact(&mut buf)?;
 
@@ -144,7 +134,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::U16 => {
+            TdmsDataType::U16(_) => {
                 let mut buf: [u8; 2] = [0; 2];
                 r.read_exact(&mut buf)?;
 
@@ -154,7 +144,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::U32 => {
+            TdmsDataType::U32(_) => {
                 let mut buf: [u8; 4] = [0; 4];
                 r.read_exact(&mut buf)?;
 
@@ -164,7 +154,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::U64 => {
+            TdmsDataType::U64(_) => {
                 let mut buf: [u8; 8] = [0; 8];
                 r.read_exact(&mut buf)?;
 
@@ -174,7 +164,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::SingleFloat => {
+            TdmsDataType::SingleFloat(_) => {
                 let mut buf: [u8; 4] = [0; 4];
                 r.read_exact(&mut buf)?;
 
@@ -184,7 +174,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::DoubleFloat => {
+            TdmsDataType::DoubleFloat(_) => {
                 let mut buf: [u8; 8] = [0; 8];
                 r.read_exact(&mut buf)?;
 
@@ -194,7 +184,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::ExtendedFloat => {
+            TdmsDataType::ExtendedFloat(_) => {
                 let mut buf: [u8; 10] = [0; 10];
                 r.read_exact(&mut buf)?;
 
@@ -204,7 +194,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::SingleFloatWithUnit => {
+            TdmsDataType::SingleFloatWithUnit(_) => {
                 let mut buf: [u8; 4] = [0; 4];
                 r.read_exact(&mut buf)?;
 
@@ -214,7 +204,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::DoubleFloatWithUnit => {
+            TdmsDataType::DoubleFloatWithUnit(_) => {
                 let mut buf: [u8; 8] = [0; 8];
                 r.read_exact(&mut buf)?;
 
@@ -224,7 +214,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::ExtendedFloatWithUnit => {
+            TdmsDataType::ExtendedFloatWithUnit(_) => {
                 let mut buf: [u8; 10] = [0; 10];
                 r.read_exact(&mut buf)?;
 
@@ -262,7 +252,7 @@ impl TDMSValue {
                     value: Some(value),
                 })
             }
-            TdmsDataType::Boolean => {
+            TdmsDataType::Boolean(_) => {
                 let mut buf: [u8; 1] = [0; 1];
                 r.read_exact(&mut buf)?;
 
@@ -272,7 +262,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::TimeStamp => {
+            TdmsDataType::TimeStamp(_) => {
                 let mut buf: [u8; 16] = [0; 16];
                 r.read_exact(&mut buf)?;
 
@@ -294,7 +284,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::ComplexSingleFloat => {
+            TdmsDataType::ComplexSingleFloat(_) => {
                 let mut buf: [u8; 8] = [0; 8];
                 r.read_exact(&mut buf)?;
 
@@ -304,7 +294,7 @@ impl TDMSValue {
                     value: Some(buf.to_vec()),
                 })
             }
-            TdmsDataType::ComplexDoubleFloat => {
+            TdmsDataType::ComplexDoubleFloat(_) => {
                 let mut buf: [u8; 16] = [0; 16];
                 r.read_exact(&mut buf)?;
 

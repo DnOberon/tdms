@@ -1,10 +1,20 @@
-use crate::segment::{ChannelPath, GroupPath};
-use crate::{General, Segment, TdmsError};
+use crate::segment::{ChannelPath, DAQmxDataIndex, GroupPath, MetadataProperty, RawDataIndex};
+use crate::{General, Segment, TdmsDataType, TdmsError};
 use std::io::{BufReader, Read, Seek};
 use std::marker::PhantomData;
 
+#[derive(Clone, Debug)]
+pub struct Channel {
+    pub full_path: String,
+    pub path: String,
+    pub data_type: TdmsDataType,
+    pub raw_data_index: Option<RawDataIndex>,
+    pub daqmx_data_index: Option<DAQmxDataIndex>,
+    pub properties: Vec<MetadataProperty>,
+}
+
 #[derive(Debug)]
-pub struct Channel<'a, R: Read + Seek, T> {
+pub struct ChannelData<'a, R: Read + Seek, T> {
     group_path: GroupPath,
     path: ChannelPath,
     segments: Vec<&'a Segment>,
@@ -15,7 +25,7 @@ pub struct Channel<'a, R: Read + Seek, T> {
     _mask: PhantomData<T>,
 }
 
-impl<'a, R: Read + Seek, T> Channel<'a, R, T> {
+impl<'a, R: Read + Seek, T> ChannelData<'a, R, T> {
     pub fn new(
         segments: Vec<&'a Segment>,
         group_path: String,
@@ -30,7 +40,7 @@ impl<'a, R: Read + Seek, T> Channel<'a, R, T> {
 
         let current_segment = segments[0];
 
-        return Ok(Channel {
+        return Ok(ChannelData {
             group_path,
             path,
             segments,
@@ -43,7 +53,7 @@ impl<'a, R: Read + Seek, T> Channel<'a, R, T> {
     }
 }
 
-impl<'a, R: Read + Seek> Iterator for Channel<'a, R, f64> {
+impl<'a, R: Read + Seek> Iterator for ChannelData<'a, R, f64> {
     type Item = ();
 
     fn next(&mut self) -> Option<Self::Item> {

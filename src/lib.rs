@@ -40,7 +40,7 @@
 //!             // depending on your data type. Currently this feature is unimplemented but the method
 //!             // of calling this is set down for future changes
 //!             let full_channel = match data_type { // the returned full channel is an iterator over raw data
-//!                 TdmsDataType::DoubleFloat => file.channel_double_float(&group, &channel),
+//!                 TdmsDataType::DoubleFloat(_) => file.channel_double_float(&group, &channel),
 //!                 _ => {
 //!                     panic!("{}", "channel for data type unimplemented")
 //!                 }
@@ -69,7 +69,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 pub mod error;
-use crate::channel::Channel;
+use crate::channel::ChannelData;
 use crate::TdmsError::{
     General, InvalidDAQmxDataIndex, InvalidSegment, StringConversionError, UnknownDataType,
 };
@@ -143,8 +143,8 @@ impl<R: Read + Seek> TDMSFile<R> {
                 Some(m) => m,
             };
 
-            for (channel, data_type) in channel_map {
-                map.insert(String::from(channel), data_type.clone());
+            for (channelPath, channel) in channel_map {
+                map.insert(String::from(channelPath), channel.data_type.clone());
             }
         }
 
@@ -158,10 +158,10 @@ impl<R: Read + Seek> TDMSFile<R> {
         &self,
         group_path: &str,
         path: &str,
-    ) -> Result<Channel<R, f64>, TdmsError> {
+    ) -> Result<ChannelData<R, f64>, TdmsError> {
         let vec = self.load_segments(group_path, path);
 
-        return Channel::new(vec, group_path.to_string(), path.to_string(), &self.reader);
+        return ChannelData::new(vec, group_path.to_string(), path.to_string(), &self.reader);
     }
 
     fn load_segments(&self, group_path: &str, path: &str) -> Vec<&Segment> {

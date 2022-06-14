@@ -41,7 +41,7 @@ fn main() {
             // depending on your data type. Currently this feature is unimplemented but the method
             // of calling this is set down for future changes
             let full_channel = match data_type { // the returned full channel is an iterator over raw data
-                TdmsDataType::DoubleFloat => file.channel_double_float(&group, &channel),
+                TdmsDataType::DoubleFloat(_) => file.channel_double_float(&group, &channel),
                 _ => {
                     panic!("{}", "channel for data type unimplemented")
                 }

@@ -38,7 +38,7 @@ fn can_read_segments_data_after() {
     };
 
     match File::open(Path::new("data/standard.tdms")) {
-        Ok(mut r) => match file.segments[0].all_data(&mut r) {
+        Ok(mut r) => match file.segments[0].raw_data(&mut r) {
             Ok(data) => match data {
                 None => {
                     panic!("unable to retrieve segment data")
@@ -61,7 +61,7 @@ fn can_read_segments_data_after_reader() {
     };
 
     match File::open(Path::new("data/standard.tdms")) {
-        Ok(mut r) => match file.segments[0].all_data_reader(&mut r) {
+        Ok(mut r) => match file.segments[0].raw_data_reader(&mut r) {
             Ok(data) => (assert_eq!(data.limit(), 288000)),
             Err(e) => panic!("{:?}", e),
         },

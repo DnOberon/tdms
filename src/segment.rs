@@ -1,3 +1,4 @@
+use crate::channel::Channel;
 use crate::data_type::{TDMSValue, TdmsDataType};
 use crate::TdmsError::ReadError;
 use crate::{to_i32, to_u32, to_u64};
@@ -32,7 +33,7 @@ pub struct Segment {
     pub raw_data: Option<Vec<u8>>,
     pub start_pos: u64,
     pub end_pos: u64,
-    pub groups: IndexMap<GroupPath, Option<IndexMap<ChannelPath, TdmsDataType>>>,
+    pub groups: IndexMap<GroupPath, Option<IndexMap<ChannelPath, Channel>>>,
 }
 
 /// GroupPath is a simple alias to allow our function signatures to be more telling
@@ -80,8 +81,8 @@ impl Segment {
         // somehow building this list dynamically as we read the file but honestly the performance
         // hit according to benches was minimal and this makes a cleaner set of function boundaries
         // and lets us get away from passing in mutable state all over the place
-        let mut groups: IndexMap<GroupPath, Option<IndexMap<ChannelPath, TdmsDataType>>> =
-            IndexMap::<GroupPath, Option<IndexMap<ChannelPath, TdmsDataType>>>::new();
+        let mut groups: IndexMap<GroupPath, Option<IndexMap<ChannelPath, Channel>>> =
+            IndexMap::<GroupPath, Option<IndexMap<ChannelPath, Channel>>>::new();
 
         match &metadata {
             Some(metadata) => {
@@ -114,7 +115,23 @@ impl Segment {
                                 Some(map) => match data_type {
                                     TdmsDataType::Void => {}
                                     _ => {
-                                        map.insert(rem_quotes(paths[2]).to_string(), data_type);
+                                        map.insert(
+                                            rem_quotes(paths[2]).to_string(),
+                                            Channel {
+                                                full_path: obj.object_path.clone(),
+                                                path: paths[2].to_string(),
+                                                data_type,
+                                                raw_data_index: match &obj.raw_data_index {
+                                                    Some(index) => Some(index.clone()),
+                                                    None => None,
+                                                },
+                                                daqmx_data_index: match &obj.daqmx_data_index {
+                                                    Some(index) => Some(index.clone()),
+                                                    None => None,
+                                                },
+                                                properties: obj.properties.clone(),
+                                            },
+                                        );
                                     }
                                 },
                                 None => match data_type {
@@ -122,7 +139,20 @@ impl Segment {
                                     _ => {
                                         groups.insert(
                                             rem_quotes(paths[1]).to_string(),
-                                            Some(indexmap! {rem_quotes(paths[2]).to_string() => data_type}),
+                                            Some(indexmap! {rem_quotes(paths[2]).to_string() =>   Channel {
+                                                full_path: obj.object_path.clone(),
+                                                path: paths[2].to_string(),
+                                                data_type,
+                                                raw_data_index: match &obj.raw_data_index {
+                                                    Some(index) => Some(index.clone()),
+                                                    None => None,
+                                                },
+                                                daqmx_data_index: match &obj.daqmx_data_index {
+                                                    Some(index) => Some(index.clone()),
+                                                    None => None,
+                                                },
+                                                properties: obj.properties.clone(),
+                                            },}),
                                         );
                                     }
                                 },
@@ -150,7 +180,7 @@ impl Segment {
     /// a large file, better to pull a reader. This will return the current raw_data field if it's
     /// already been read in, avoiding a second read. This method requires the original reader used
     /// in the from_reader method above
-    pub fn all_data<R: Read + Seek>(&mut self, r: &mut R) -> Result<&Option<Vec<u8>>, TdmsError> {
+    pub fn raw_data<R: Read + Seek>(&mut self, r: &mut R) -> Result<&Option<Vec<u8>>, TdmsError> {
         match &self.raw_data {
             Some(_) => (),
             None => {
@@ -172,7 +202,7 @@ impl Segment {
 
     /// `all_data_reader` returns a Take containing the raw data for the segment. This function assumes
     /// that the reader passed in is the ORIGINAL reader, or another instance thereof.
-    pub fn all_data_reader<R: Read + Seek>(&mut self, mut r: R) -> Result<Take<R>, TdmsError> {
+    pub fn raw_data_reader<R: Read + Seek>(&mut self, mut r: R) -> Result<Take<R>, TdmsError> {
         return match r.seek(SeekFrom::Start(
             self.start_pos + self.lead_in.raw_data_offset,
         )) {
