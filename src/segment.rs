@@ -119,7 +119,8 @@ impl Segment {
                                             rem_quotes(paths[2]).to_string(),
                                             Channel {
                                                 full_path: obj.object_path.clone(),
-                                                path: paths[2].to_string(),
+                                                group_path: rem_quotes(paths[1]).to_string(),
+                                                path: rem_quotes(paths[2]).to_string(),
                                                 data_type,
                                                 raw_data_index: match &obj.raw_data_index {
                                                     Some(index) => Some(index.clone()),
@@ -141,7 +142,8 @@ impl Segment {
                                             rem_quotes(paths[1]).to_string(),
                                             Some(indexmap! {rem_quotes(paths[2]).to_string() =>   Channel {
                                                 full_path: obj.object_path.clone(),
-                                                path: paths[2].to_string(),
+                                                group_path: rem_quotes(paths[1]).to_string(),
+                                                path: rem_quotes(paths[2]).to_string(),
                                                 data_type,
                                                 raw_data_index: match &obj.raw_data_index {
                                                     Some(index) => Some(index.clone()),

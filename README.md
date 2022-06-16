@@ -35,13 +35,14 @@ fn main() {
         // fetch an IndexSet of the group's channels
         let channels = file.channels(&group);
 
-        for (channel, data_type) in channels {
+        for (channelPath, channel) in channels {
             // once you know the channel's full path (group + channel) you can ask for the full
             // channel object. In order to fetch a channel you must call the proper channel func
             // depending on your data type. Currently this feature is unimplemented but the method
             // of calling this is set down for future changes
-            let full_channel = match data_type { // the returned full channel is an iterator over raw data
-                TdmsDataType::DoubleFloat(_) => file.channel_double_float(&group, &channel),
+            let full_channel = match channel.data_type {
+                // the returned full channel is an iterator over raw data
+                TdmsDataType::DoubleFloat(_) => file.channel_data_double_float(channel),
                 _ => {
                     panic!("{}", "channel for data type unimplemented")
                 }
@@ -49,7 +50,6 @@ fn main() {
         }
     }
 }
-
 ```
 
 ## Contributing

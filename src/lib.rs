@@ -34,13 +34,13 @@
 //!        // fetch an IndexSet of the group's channels
 //!         let channels = file.channels(&group);
 //!
-//!         for (channel, data_type) in channels {
+//!         for (channelPath,  channel) in channels {
 //!             // once you know the channel's full path (group + channel) you can ask for the full
 //!             // channel object. In order to fetch a channel you must call the proper channel func
 //!             // depending on your data type. Currently this feature is unimplemented but the method
 //!             // of calling this is set down for future changes
 //!             let full_channel = match data_type { // the returned full channel is an iterator over raw data
-//!                 TdmsDataType::DoubleFloat(_) => file.channel_double_float(&group, &channel),
+//!                 TdmsDataType::DoubleFloat(_) => file.channel_data_double_float(channel),
 //!                 _ => {
 //!                     panic!("{}", "channel for data type unimplemented")
 //!                 }
@@ -69,7 +69,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 pub mod error;
-use crate::channel::ChannelData;
+use crate::channel::{Channel, ChannelDataIter};
 use crate::TdmsError::{
     General, InvalidDAQmxDataIndex, InvalidSegment, StringConversionError, UnknownDataType,
 };
@@ -129,8 +129,8 @@ impl<R: Read + Seek> TDMSFile<R> {
         return Vec::from_iter(map);
     }
 
-    pub fn channels(&self, group_path: &str) -> HashMap<String, TdmsDataType> {
-        let mut map: HashMap<String, TdmsDataType> = HashMap::new();
+    pub fn channels(&self, group_path: &str) -> HashMap<String, &Channel> {
+        let mut map: HashMap<String, &Channel> = HashMap::new();
 
         for segment in &self.segments {
             let channel_map = match segment.groups.get(group_path) {
@@ -144,7 +144,7 @@ impl<R: Read + Seek> TDMSFile<R> {
             };
 
             for (channelPath, channel) in channel_map {
-                map.insert(String::from(channelPath), channel.data_type.clone());
+                map.insert(String::from(channelPath), channel);
             }
         }
 
@@ -154,14 +154,13 @@ impl<R: Read + Seek> TDMSFile<R> {
     /// returns a channel who's type is the native rust type equivalent to TdmsDoubleFloat, in this
     /// case `f64` - the channel implements Iterator and using said iterator will let you move through
     /// the channel's raw data if any exists
-    pub fn channel_double_float(
+    pub fn channel_data_double_float(
         &self,
-        group_path: &str,
-        path: &str,
-    ) -> Result<ChannelData<R, f64>, TdmsError> {
-        let vec = self.load_segments(group_path, path);
+        channel: &Channel,
+    ) -> Result<ChannelDataIter<R, f64>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
 
-        return ChannelData::new(vec, group_path.to_string(), path.to_string(), &self.reader);
+        return ChannelDataIter::new(vec, channel.clone(), &self.reader);
     }
 
     fn load_segments(&self, group_path: &str, path: &str) -> Vec<&Segment> {
