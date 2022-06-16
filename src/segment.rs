@@ -1,4 +1,3 @@
-use crate::channel::Channel;
 use crate::data_type::{TDMSValue, TdmsDataType};
 use crate::TdmsError::ReadError;
 use crate::{to_i32, to_u32, to_u64};
@@ -40,6 +39,17 @@ pub struct Segment {
 pub type GroupPath = String;
 /// ChannelPath is a simple alias to allow our function signatures to be more telling
 pub type ChannelPath = String;
+
+#[derive(Clone, Debug)]
+pub struct Channel {
+    pub full_path: String,
+    pub group_path: String,
+    pub path: String,
+    pub data_type: TdmsDataType,
+    pub raw_data_index: Option<RawDataIndex>,
+    pub daqmx_data_index: Option<DAQmxDataIndex>,
+    pub properties: Vec<MetadataProperty>,
+}
 
 impl Segment {
     /// `new` expects a reader who's cursor position is at the start of a new TDMS segment.

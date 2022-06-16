@@ -19,7 +19,7 @@ fn main() {
         // fetch an IndexSet of the group's channels
         let channels = file.channels(&group);
 
-        for (channelPath, channel) in channels {
+        for (channel_path, channel) in channels {
             // once you know the channel's full path (group + channel) you can ask for the full
             // channel object. In order to fetch a channel you must call the proper channel func
             // depending on your data type. Currently this feature is unimplemented but the method

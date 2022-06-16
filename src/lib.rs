@@ -22,7 +22,7 @@
 //! fn main() {
 //!     // open and parse the TDMS file, passing in metadata false will mean the entire file is
 //!     // read into memory, not just the metadata
-//!     let file = match TDMSFile::from_path(Path::new("data/standard.tdms"), false) {
+//!     let mut file = match TDMSFile::from_path(Path::new("data/standard.tdms"), false) {
 //!         Ok(f) => f,
 //!        Err(e) => panic!("{:?}", e),
 //!     };
@@ -61,23 +61,22 @@
 //! ## License
 //! [MIT](https://choosealicense.com/licenses/mit/)
 //!
-use data_type::TdmsDataType;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::File;
-use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::io::{BufReader, Seek, SeekFrom};
 use std::path::Path;
 
 pub mod error;
-use crate::channel::{Channel, ChannelDataIter};
+use crate::channel_iter::ChannelDataIter;
 use crate::TdmsError::{
     General, InvalidDAQmxDataIndex, InvalidSegment, StringConversionError, UnknownDataType,
 };
 pub use error::TdmsError;
 use segment::Endianness::{Big, Little};
-use segment::{Endianness, Segment};
+use segment::{Channel, Endianness, Segment};
 
-pub mod channel;
+pub mod channel_iter;
 pub mod data_type;
 pub mod segment;
 #[cfg(test)]
@@ -85,15 +84,15 @@ mod tests;
 
 #[derive(Debug)]
 /// `TDDMSFile` represents all `segments` of a TDMS file in the order in which they were read.
-pub struct TDMSFile<R: Read + Seek> {
+pub struct TDMSFile<'a> {
     pub segments: Vec<Segment>,
-    reader: BufReader<R>,
+    path: &'a Path,
 }
 
-impl TDMSFile<File> {
+impl<'a> TDMSFile<'a> {
     /// `from_path` expects a path and whether or not to read only the metadata of each segment vs
     /// the entire file into working memory.
-    pub fn from_path(path: &Path, metadata_only: bool) -> Result<Self, TdmsError> {
+    pub fn from_path(path: &'a Path, metadata_only: bool) -> Result<Self, TdmsError> {
         let metadata = fs::metadata(path)?;
         let file = File::open(path)?;
         let mut reader = BufReader::with_capacity(4096, file);
@@ -111,11 +110,9 @@ impl TDMSFile<File> {
             segments.push(segment);
         }
 
-        return Ok(TDMSFile { segments, reader });
+        return Ok(TDMSFile { segments, path });
     }
-}
 
-impl<R: Read + Seek> TDMSFile<R> {
     /// groups returns all possible groups throughout the file
     pub fn groups(&self) -> Vec<String> {
         let mut map: HashSet<String> = HashSet::new();
@@ -143,8 +140,8 @@ impl<R: Read + Seek> TDMSFile<R> {
                 Some(m) => m,
             };
 
-            for (channelPath, channel) in channel_map {
-                map.insert(String::from(channelPath), channel);
+            for (channel_path, channel) in channel_map {
+                map.insert(String::from(channel_path), channel);
             }
         }
 
@@ -157,10 +154,11 @@ impl<R: Read + Seek> TDMSFile<R> {
     pub fn channel_data_double_float(
         &self,
         channel: &Channel,
-    ) -> Result<ChannelDataIter<R, f64>, TdmsError> {
+    ) -> Result<ChannelDataIter<f64, File>, TdmsError> {
         let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
 
-        return ChannelDataIter::new(vec, channel.clone(), &self.reader);
+        return ChannelDataIter::new(vec, channel.clone(), reader);
     }
 
     fn load_segments(&self, group_path: &str, path: &str) -> Vec<&Segment> {
