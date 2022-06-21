@@ -2,7 +2,7 @@ use crate::{Big, Endianness, General, Little, TdmsError, UnknownDataType};
 use std::io::{Read, Seek};
 
 /// Represents the potential TDMS data types. Contained value is size in bytes if applicable
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TdmsDataType {
     Void,
     I8(usize),
@@ -22,7 +22,7 @@ pub enum TdmsDataType {
     String,
     Boolean(usize),
     TimeStamp(usize),
-    FixedPoint,
+    FixedPoint(usize),
     ComplexSingleFloat(usize),
     ComplexDoubleFloat(usize),
     DAQmxRawData,
@@ -51,12 +51,41 @@ impl TryFrom<i32> for TdmsDataType {
             x if x == 0x20 => Ok(TdmsDataType::String),
             x if x == 0x21 => Ok(TdmsDataType::Boolean(1)),
             x if x == 0x44 => Ok(TdmsDataType::TimeStamp(16)),
-            x if x == 0x4f => Ok(TdmsDataType::FixedPoint),
+            x if x == 0x4f => Ok(TdmsDataType::FixedPoint(10)),
             x if x == 0x08000c => Ok(TdmsDataType::ComplexSingleFloat(4)),
             x if x == 0x10000d => Ok(TdmsDataType::ComplexDoubleFloat(8)),
             x if x == -1 => Ok(TdmsDataType::DAQmxRawData), // 0xFFFFFFFF equivalent
             _ => Err(UnknownDataType()),
         }
+    }
+}
+
+impl TdmsDataType {
+    pub fn get_size(data_type: TdmsDataType) -> usize {
+        return match data_type {
+            TdmsDataType::Void => 0,
+            TdmsDataType::I8(v) => v,
+            TdmsDataType::I16(v) => v,
+            TdmsDataType::I32(v) => v,
+            TdmsDataType::I64(v) => v,
+            TdmsDataType::U8(v) => v,
+            TdmsDataType::U16(v) => v,
+            TdmsDataType::U32(v) => v,
+            TdmsDataType::U64(v) => v,
+            TdmsDataType::SingleFloat(v) => v,
+            TdmsDataType::DoubleFloat(v) => v,
+            TdmsDataType::ExtendedFloat(v) => v,
+            TdmsDataType::SingleFloatWithUnit(v) => v,
+            TdmsDataType::DoubleFloatWithUnit(v) => v,
+            TdmsDataType::ExtendedFloatWithUnit(v) => v,
+            TdmsDataType::String => 0,
+            TdmsDataType::Boolean(v) => v,
+            TdmsDataType::TimeStamp(v) => v,
+            TdmsDataType::FixedPoint(v) => v,
+            TdmsDataType::ComplexSingleFloat(v) => v,
+            TdmsDataType::ComplexDoubleFloat(v) => v,
+            TdmsDataType::DAQmxRawData => 0,
+        };
     }
 }
 
@@ -274,8 +303,8 @@ impl TDMSValue {
             }
             // there is little information on how to handle FixedPoint types, for
             // now we'll store them as a 64 bit integer and hope that will be enough
-            TdmsDataType::FixedPoint => {
-                let mut buf: [u8; 8] = [0; 8];
+            TdmsDataType::FixedPoint(_) => {
+                let mut buf: [u8; 10] = [0; 10];
                 r.read_exact(&mut buf)?;
 
                 Ok(TDMSValue {

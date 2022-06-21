@@ -1,4 +1,5 @@
 use std::io;
+use std::num::TryFromIntError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -7,11 +8,17 @@ pub enum TdmsError {
     #[error("{0:?}")]
     ReadError(#[from] io::Error),
 
+    #[error("{0:?}")]
+    IntConversionError(#[from] TryFromIntError),
+
     #[error("error while reading .tdms file {0}")]
     General(String),
 
     #[error("invalid segment - malformed or missing lead-in tag")]
     InvalidSegment(),
+
+    #[error("end of segments in file reached")]
+    EndOfSegments(),
 
     #[error("invalid DAQmx data index")]
     InvalidDAQmxDataIndex(),
@@ -22,6 +29,6 @@ pub enum TdmsError {
     #[error("unknown data type")]
     UnknownDataType(),
 
-    #[error("not implemented")]
-    NotImplemented,
+    #[error("{0} not implemented")]
+    NotImplemented(String),
 }

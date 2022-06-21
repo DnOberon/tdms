@@ -19,7 +19,7 @@ fn main() {
         // fetch an IndexSet of the group's channels
         let channels = file.channels(&group);
 
-        for (channel_path, channel) in channels {
+        for (_, channel) in channels {
             // once you know the channel's full path (group + channel) you can ask for the full
             // channel object. In order to fetch a channel you must call the proper channel func
             // depending on your data type. Currently this feature is unimplemented but the method
@@ -31,6 +31,17 @@ fn main() {
                     panic!("{}", "channel for data type unimplemented")
                 }
             };
+
+            let mut full_channel_iterator = match full_channel {
+                Ok(i) => i,
+                Err(e) => {
+                    panic!("{:?}", e)
+                }
+            };
+
+            let value = full_channel_iterator.next();
+            println!("{:?}", value);
+            break;
         }
     }
 }

@@ -306,9 +306,9 @@ impl LeadIn {
         raw_offset.clone_from_slice(&lead_in[20..28]);
 
         let raw_data_offset = if table_of_contents & K_TOC_BIG_ENDIAN != 0 {
-            u64::from_be_bytes(raw_offset)
+            u64::from_be_bytes(raw_offset) + 28
         } else {
-            u64::from_le_bytes(raw_offset)
+            u64::from_le_bytes(raw_offset) + 28
         };
 
         return Ok(LeadIn {
@@ -705,6 +705,16 @@ macro_rules! to_u64 {
         match $t {
             Little => u64::from_le_bytes($x),
             Big => u64::from_be_bytes($x),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! to_f64 {
+    ( $x:ident, $t:ident ) => {
+        match $t {
+            Little => f64::from_le_bytes($x),
+            Big => f64::from_be_bytes($x),
         }
     };
 }

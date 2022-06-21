@@ -61,7 +61,7 @@
 //! ## License
 //! [MIT](https://choosealicense.com/licenses/mit/)
 //!
-use std::collections::{HashMap, HashSet};
+use indexmap::{IndexMap, IndexSet};
 use std::fs;
 use std::fs::File;
 use std::io::{BufReader, Seek, SeekFrom};
@@ -115,7 +115,7 @@ impl<'a> TDMSFile<'a> {
 
     /// groups returns all possible groups throughout the file
     pub fn groups(&self) -> Vec<String> {
-        let mut map: HashSet<String> = HashSet::new();
+        let mut map: IndexSet<String> = IndexSet::new();
 
         for segment in &self.segments {
             for (group, _) in &segment.groups {
@@ -126,8 +126,8 @@ impl<'a> TDMSFile<'a> {
         return Vec::from_iter(map);
     }
 
-    pub fn channels(&self, group_path: &str) -> HashMap<String, &Channel> {
-        let mut map: HashMap<String, &Channel> = HashMap::new();
+    pub fn channels(&self, group_path: &str) -> IndexMap<String, &Channel> {
+        let mut map: IndexMap<String, &Channel> = IndexMap::new();
 
         for segment in &self.segments {
             let channel_map = match segment.groups.get(group_path) {
