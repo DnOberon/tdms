@@ -39,8 +39,12 @@ fn main() {
                 }
             };
 
-            let value = full_channel_iterator.next();
-            println!("{:?}", value);
+            for _ in 0..10 {
+                let value = full_channel_iterator.next();
+                println!("{:?}", value.unwrap());
+
+            }
+
             break;
         }
     }

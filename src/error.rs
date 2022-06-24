@@ -17,6 +17,13 @@ pub enum TdmsError {
     #[error("invalid segment - malformed or missing lead-in tag")]
     InvalidSegment(),
 
+
+    #[error("requested group does not exist in segment")]
+    GroupDoesNotExist(),
+
+    #[error("requested channel does not exist in segment")]
+    ChannelDoesNotExist(),
+
     #[error("end of segments in file reached")]
     EndOfSegments(),
 

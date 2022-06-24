@@ -1,10 +1,14 @@
 use crate::data_type::TdmsDataType;
 use crate::segment::{Channel, ChannelPath};
-use crate::TdmsError::{EndOfSegments, IntConversionError, NotImplemented, ReadError};
-use crate::{Endianness, General, Segment, TdmsError};
+use crate::TdmsError::{
+    ChannelDoesNotExist, EndOfSegments, GroupDoesNotExist, IntConversionError, NotImplemented,
+    ReadError,
+};
+use crate::{Endianness, General, InvalidDAQmxDataIndex, InvalidSegment, Segment, StringConversionError, TdmsError, UnknownDataType};
 use indexmap::IndexMap;
 use std::cell::RefCell;
-use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::io;
+use std::io::{BufReader, ErrorKind, Read, Seek, SeekFrom};
 use std::marker::PhantomData;
 
 #[derive(Debug)]
@@ -13,7 +17,6 @@ pub struct ChannelDataIter<'a, T, R: Read + Seek> {
     segments: Vec<&'a Segment>,
     reader: BufReader<R>,
     _mask: PhantomData<T>,
-    pub error: Option<TdmsError>,
 }
 
 impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
@@ -35,7 +38,6 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             segments,
             reader,
             _mask: Default::default(),
-            error: None,
         };
 
         // set the reader to the first segment's start position so that the rest of the reader works
@@ -92,8 +94,35 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
         // if we're past the channel's end pos for the segment, move to the end of the segment and
         // recursively call this function - setting the new channel's raw index and calculating
         // start and end pos if needed
+
         if stream_pos >= self.channel.borrow().end_pos {
             self.reader.seek(SeekFrom::Start(current_segment.end_pos))?;
+            let current_segment = match self.segments.get(index + 1) {
+                None => return Err(EndOfSegments()),
+                Some(s) => s,
+            };
+
+            if current_segment.has_new_obj_list() {
+                let channels = match current_segment
+                    .groups
+                    .get(&self.channel.borrow().group_path)
+                {
+                    None => return Err(GroupDoesNotExist()),
+                    Some(g) => g,
+                };
+
+                let channel_map = match channels {
+                    None => return Err(ChannelDoesNotExist()),
+                    Some(c) => c,
+                };
+
+                match channel_map.get(&self.channel.borrow().path) {
+                    None => return Err(ChannelDoesNotExist()),
+                    Some(channel) => {
+                        self.channel.swap(&RefCell::new(channel));
+                    }
+                };
+            }
 
             // TODO: check new segment if has new obj list, if does, can ignore this
             // TODO: check new segment if has info on the current channel, if it does, check the data index if data index new, use to calculate start and end pos
@@ -111,6 +140,20 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
     type Item = f64;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        match self.advance_reader_to_next() {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e)
+                }
+
+                return None
+            },
+            _ => (),
+        }
+
         let segment_index = self.current_segment_index();
         let current_segment = match self.segments.get(segment_index) {
             None => return None,
@@ -124,7 +167,12 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
         match self.reader.read_exact(&mut buf) {
             Ok(_) => (),
             Err(e) => {
-                self.error = Some(ReadError(e));
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e)
+                }
+
                 return None;
             }
         }
@@ -133,10 +181,6 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
             Endianness::Little => Some(f64::from_le_bytes(buf)),
             Endianness::Big => Some(f64::from_be_bytes(buf)),
         };
-
-        // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment
-        self.advance_reader_to_next();
 
         return value;
     }
