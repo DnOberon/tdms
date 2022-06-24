@@ -6,8 +6,12 @@
 //! ### Current Features
 //! - Read both standard and big endian encoded files
 //! - Read files with DAQmx data and data indices
-//! - Read all segments in file, along with their groups and channels (per segment only)
-//! - Read all raw data contained in all segments in file (as a `Vec<u8>` only at the present time)
+//! - Read all segments in file, along with their groups and channels
+//!
+//! ### Planned Features
+//! - Iterators for each channel type, return native Rust values from encoded data channels
+//! - DAQmx data channel iterator support
+//! - Searching on string channels
 //!
 //!
 //! ## Usage
@@ -22,7 +26,7 @@
 //! fn main() {
 //!     // open and parse the TDMS file, passing in metadata false will mean the entire file is
 //!     // read into memory, not just the metadata
-//!     let mut file = match TDMSFile::from_path(Path::new("data/standard.tdms"), false) {
+//!     let mut file = match TDMSFile::from_path(Path::new("data/standard.tdms")) {
 //!         Ok(f) => f,
 //!        Err(e) => panic!("{:?}", e),
 //!     };
@@ -92,14 +96,14 @@ pub struct TDMSFile<'a> {
 impl<'a> TDMSFile<'a> {
     /// `from_path` expects a path and whether or not to read only the metadata of each segment vs
     /// the entire file into working memory.
-    pub fn from_path(path: &'a Path, metadata_only: bool) -> Result<Self, TdmsError> {
+    pub fn from_path(path: &'a Path) -> Result<Self, TdmsError> {
         let metadata = fs::metadata(path)?;
         let file = File::open(path)?;
         let mut reader = BufReader::with_capacity(4096, file);
         let mut segments: Vec<Segment> = vec![];
 
         loop {
-            let segment = Segment::new(&mut reader, metadata_only)?;
+            let segment = Segment::new(&mut reader)?;
 
             if segment.end_pos == metadata.len() {
                 segments.push(segment);
@@ -153,12 +157,12 @@ impl<'a> TDMSFile<'a> {
     /// the channel's raw data if any exists
     pub fn channel_data_double_float(
         &self,
-        channel: &Channel,
+        channel: &'a Channel,
     ) -> Result<ChannelDataIter<f64, File>, TdmsError> {
         let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
         let reader = BufReader::with_capacity(4096, File::open(self.path)?);
 
-        return ChannelDataIter::new(vec, channel.clone(), reader);
+        return ChannelDataIter::new(vec, channel, reader);
     }
 
     fn load_segments(&self, group_path: &str, path: &str) -> Vec<&Segment> {

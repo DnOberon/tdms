@@ -2,7 +2,7 @@
 
 `tdms` is a LabVIEW TDMS file parser library written in Rust. This is meant to be a general purpose library for reading and performing any calculation work on data contained in those files.
 
-**Note:** This library is a work in progress. While I do not expect the current function signatures and library structure to change, you could experience difficulties due to early adoption. 
+**Note:** This library is a work in progress. While I do not expect the current function signatures and library structure to change, you could experience difficulties due to early adoption. Functionality is currently limited. Raw data channel iterators will be added slowly and a list will be kept indicating which are available and which are under construction 
 
 ### Current Features
 - Read both standard and big endian encoded files
@@ -10,6 +10,11 @@
 - Read all segments in file, along with their groups and channels (per segment only)
 - Read all raw data contained in all segments in file (as a `Vec<u8>` only at the present time)
 
+
+### Planned Features
+- Iterators for each channel type, return native Rust values from encoded data channels
+- DAQmx data channel iterator support
+- Searching on string channels
 
 ## Usage
 
@@ -23,7 +28,7 @@ use tdms::TDMSFile;
 fn main() {
     // open and parse the TDMS file, passing in metadata false will mean the entire file is
     // read into memory, not just the metadata
-    let file = match TDMSFile::from_path(Path::new("data/standard.tdms"), false) {
+    let file = match TDMSFile::from_path(Path::new("data/standard.tdms")) {
         Ok(f) => f,
         Err(e) => panic!("{:?}", e),
     };

@@ -1,11 +1,10 @@
 use crate::data_type::{TDMSValue, TdmsDataType};
-use crate::TdmsError::ReadError;
 use crate::{to_i32, to_u32, to_u64};
 use crate::{
     Big, General, InvalidDAQmxDataIndex, InvalidSegment, Little, StringConversionError, TdmsError,
 };
 use indexmap::{indexmap, IndexMap};
-use std::io::{Read, Seek, SeekFrom, Take};
+use std::io::{Read, Seek};
 
 /// These are bitmasks for the Table of Contents byte.
 const K_TOC_META_DATA: u32 = 1 << 1;
@@ -29,7 +28,6 @@ pub enum Endianness {
 pub struct Segment {
     pub lead_in: LeadIn,
     pub metadata: Option<Metadata>,
-    pub raw_data: Option<Vec<u8>>,
     pub start_pos: u64,
     pub end_pos: u64,
     pub groups: IndexMap<GroupPath, Option<IndexMap<ChannelPath, Channel>>>,
@@ -49,6 +47,9 @@ pub struct Channel {
     pub raw_data_index: Option<RawDataIndex>,
     pub daqmx_data_index: Option<DAQmxDataIndex>,
     pub properties: Vec<MetadataProperty>,
+    pub start_pos: u64,
+    pub end_pos: u64,
+    pub interleaved_offset: u64,
 }
 
 impl Segment {
@@ -56,7 +57,7 @@ impl Segment {
     /// You will see an InvalidSegment error return if the reader position isn't correct as the first
     /// byte read will not be the correct tag for a segment. The segment will hold on to the original
     /// reader in order to be able to return data not read into memory
-    pub fn new<R: Read + Seek>(r: &mut R, metadata_only: bool) -> Result<Self, TdmsError> {
+    pub fn new<R: Read + Seek>(r: &mut R) -> Result<Self, TdmsError> {
         let start_pos = r.stream_position()?;
         let mut lead_in = [0; 28];
 
@@ -78,21 +79,17 @@ impl Segment {
             metadata = Some(Metadata::from_reader(endianness, r)?);
         }
 
-        let mut raw_data: Option<Vec<u8>> = None;
-        if !metadata_only {
-            let mut input = r.take(lead_in.next_segment_offset - lead_in.raw_data_offset);
-            let mut data: Vec<u8> = vec![];
-            input.read_to_end(&mut data)?;
-
-            raw_data = Some(data);
-        }
-
         // if we have have metadata, load up group and channel list for the segment - I debated
         // somehow building this list dynamically as we read the file but honestly the performance
         // hit according to benches was minimal and this makes a cleaner set of function boundaries
         // and lets us get away from passing in mutable state all over the place
         let mut groups: IndexMap<GroupPath, Option<IndexMap<ChannelPath, Channel>>> =
             IndexMap::<GroupPath, Option<IndexMap<ChannelPath, Channel>>>::new();
+
+        // this variable will tell us where we're at in the raw data of the channel, allowing us to
+        // set start and end thresholds of the channel's data itself
+        let mut data_pos: u64 = start_pos + lead_in.raw_data_offset;
+        let mut interleaved_total_size: u64 = 0;
 
         match &metadata {
             Some(metadata) => {
@@ -108,6 +105,9 @@ impl Segment {
                         Some(index) => data_type = index.data_type,
                     }
 
+                    // add to the total interleaved size so we can calculate the offset later if needed
+                    interleaved_total_size += TdmsDataType::get_size(data_type) as u64;
+
                     let path = obj.object_path.clone();
                     let paths: Vec<&str> = path.split("/").collect();
 
@@ -119,30 +119,66 @@ impl Segment {
 
                     if paths.len() >= 3 && paths[2] != "" {
                         let map = groups.get_mut(rem_quotes(paths[1]));
+                        let start_pos = data_pos.clone();
+                        let mut end_pos = 0;
+
+                        let raw_data_index = match &obj.raw_data_index {
+                            Some(index) => {
+                                let type_size = TdmsDataType::get_size(index.data_type);
+
+                                // if not interleaved, the end threshold comes at chunk end
+                                if lead_in.table_of_contents & K_TOC_INTERLEAVED_DATA == 0 {
+                                    if index.data_type == TdmsDataType::String
+                                        && index.number_of_bytes.is_some()
+                                    {
+                                        // our end position for a string channel should be the end of
+                                        // the array of uint32s representing the index
+                                        end_pos = data_pos + index.number_of_values * 4;
+
+                                        // but we still need to iterate the main position to the end
+                                        // of the chunk
+                                        data_pos = data_pos + index.number_of_bytes.unwrap();
+                                    } else {
+                                        data_pos = data_pos
+                                            + (type_size as u64
+                                                * index.array_dimension as u64
+                                                * index.number_of_values);
+
+                                        end_pos = data_pos.clone();
+                                    }
+                                }
+
+                                Some(index.clone())
+                            }
+                            None => None,
+                        };
+
+                        let daqmx_data_index = match &obj.daqmx_data_index {
+                            Some(index) => Some(index.clone()),
+                            None => None,
+                        };
+
+                        let channel = Channel {
+                            full_path: obj.object_path.clone(),
+                            group_path: rem_quotes(paths[1]).to_string(),
+                            path: rem_quotes(paths[2]).to_string(),
+                            data_type,
+                            raw_data_index,
+                            daqmx_data_index,
+                            properties: obj.properties.clone(),
+                            start_pos,
+                            end_pos,
+                            // this will be calculated later as we need all the channels information
+                            // prior to calculating this offset
+                            interleaved_offset: 0,
+                        };
 
                         match map {
                             Some(map) => match map {
                                 Some(map) => match data_type {
                                     TdmsDataType::Void => {}
                                     _ => {
-                                        map.insert(
-                                            rem_quotes(paths[2]).to_string(),
-                                            Channel {
-                                                full_path: obj.object_path.clone(),
-                                                group_path: rem_quotes(paths[1]).to_string(),
-                                                path: rem_quotes(paths[2]).to_string(),
-                                                data_type,
-                                                raw_data_index: match &obj.raw_data_index {
-                                                    Some(index) => Some(index.clone()),
-                                                    None => None,
-                                                },
-                                                daqmx_data_index: match &obj.daqmx_data_index {
-                                                    Some(index) => Some(index.clone()),
-                                                    None => None,
-                                                },
-                                                properties: obj.properties.clone(),
-                                            },
-                                        );
+                                        map.insert(rem_quotes(paths[2]).to_string(), channel);
                                     }
                                 },
                                 None => match data_type {
@@ -150,21 +186,7 @@ impl Segment {
                                     _ => {
                                         groups.insert(
                                             rem_quotes(paths[1]).to_string(),
-                                            Some(indexmap! {rem_quotes(paths[2]).to_string() =>   Channel {
-                                                full_path: obj.object_path.clone(),
-                                                group_path: rem_quotes(paths[1]).to_string(),
-                                                path: rem_quotes(paths[2]).to_string(),
-                                                data_type,
-                                                raw_data_index: match &obj.raw_data_index {
-                                                    Some(index) => Some(index.clone()),
-                                                    None => None,
-                                                },
-                                                daqmx_data_index: match &obj.daqmx_data_index {
-                                                    Some(index) => Some(index.clone()),
-                                                    None => None,
-                                                },
-                                                properties: obj.properties.clone(),
-                                            },}),
+                                            Some(indexmap! {rem_quotes(paths[2]).to_string() => channel}),
                                         );
                                     }
                                 },
@@ -177,53 +199,36 @@ impl Segment {
             _ => (),
         }
 
+        if lead_in.table_of_contents & K_TOC_INTERLEAVED_DATA != 0 {
+            let mut total_size: u64 = 0;
+
+            for (_, channels) in groups.iter_mut() {
+                match channels {
+                    None => continue,
+                    Some(channels) => {
+                        for (_, channel) in channels.iter_mut() {
+                            let size = TdmsDataType::get_size(channel.data_type);
+
+                            // offset tells the iterator how many bytes to move to the next value
+                            channel.interleaved_offset = interleaved_total_size - size as u64;
+                            // update the end_pos_threshold now that we have an idea of setup
+                            channel.end_pos = end_pos - channel.interleaved_offset + total_size;
+
+                            total_size += size as u64;
+                        }
+                    }
+                }
+            }
+        }
+
         return Ok(Segment {
             lead_in,
             metadata,
-            raw_data,
             start_pos,
             // lead in plus offset
             end_pos,
             groups,
         });
-    }
-
-    /// `all_data` should be used carefully as it reads all data into memory, if you're dealing with
-    /// a large file, better to pull a reader. This will return the current raw_data field if it's
-    /// already been read in, avoiding a second read. This method requires the original reader used
-    /// in the from_reader method above
-    pub fn raw_data<R: Read + Seek>(&mut self, r: &mut R) -> Result<&Option<Vec<u8>>, TdmsError> {
-        match &self.raw_data {
-            Some(_) => (),
-            None => {
-                let mut data: Vec<u8> = vec![];
-                r.seek(SeekFrom::Start(
-                    self.start_pos + self.lead_in.raw_data_offset,
-                ))?;
-
-                let mut new_reader =
-                    r.take(self.lead_in.next_segment_offset - self.lead_in.raw_data_offset);
-                new_reader.read_to_end(&mut data)?;
-
-                self.raw_data = Some(data);
-            }
-        }
-
-        return Ok(&self.raw_data);
-    }
-
-    /// `all_data_reader` returns a Take containing the raw data for the segment. This function assumes
-    /// that the reader passed in is the ORIGINAL reader, or another instance thereof.
-    pub fn raw_data_reader<R: Read + Seek>(&mut self, mut r: R) -> Result<Take<R>, TdmsError> {
-        return match r.seek(SeekFrom::Start(
-            self.start_pos + self.lead_in.raw_data_offset,
-        )) {
-            Ok(_) => {
-                let take = r.take(self.lead_in.next_segment_offset - self.lead_in.raw_data_offset);
-                Ok(take)
-            }
-            Err(e) => Err(ReadError(e)),
-        };
     }
 
     /// this function is not accurate unless the lead in portion of the segment has been read
@@ -492,8 +497,8 @@ pub struct DAQmxDataIndex {
     pub number_of_values: u64,
     pub format_changing_size: Option<u32>,
     pub format_changing_vec: Option<Vec<FormatChangingScaler>>,
-    pub vec_size: u32,
-    pub elements_in_vec: u32,
+    pub buffer_vec_size: u32,
+    pub buffers: Vec<u32>,
 }
 
 impl DAQmxDataIndex {
@@ -533,10 +538,16 @@ impl DAQmxDataIndex {
         }
 
         r.read_exact(&mut buf)?;
-        let vec_size = to_u32!(buf, endianness);
+        let buffer_vec_size = to_u32!(buf, endianness);
 
-        r.read_exact(&mut buf)?;
-        let elements_in_vec = to_u32!(buf, endianness);
+        let mut buffers: Vec<u32> = vec![];
+
+        for _ in 0..buffer_vec_size {
+            r.read_exact(&mut buf)?;
+            let elements = to_u32!(buf, endianness);
+
+            buffers.push(elements);
+        }
 
         return Ok(DAQmxDataIndex {
             data_type: TdmsDataType::DAQmxRawData,
@@ -544,8 +555,8 @@ impl DAQmxDataIndex {
             number_of_values,
             format_changing_size,
             format_changing_vec,
-            vec_size,
-            elements_in_vec,
+            buffer_vec_size,
+            buffers,
         });
     }
 }
