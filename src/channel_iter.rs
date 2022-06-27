@@ -1,13 +1,8 @@
 use crate::data_type::TdmsDataType;
-use crate::segment::{Channel, ChannelPath};
-use crate::TdmsError::{
-    ChannelDoesNotExist, EndOfSegments, GroupDoesNotExist, IntConversionError, NotImplemented,
-    ReadError,
-};
-use crate::{Endianness, General, InvalidDAQmxDataIndex, InvalidSegment, Segment, StringConversionError, TdmsError, UnknownDataType};
-use indexmap::IndexMap;
+use crate::segment::Channel;
+use crate::TdmsError::{ChannelDoesNotExist, EndOfSegments, GroupDoesNotExist};
+use crate::{Endianness, General, Segment, TdmsError};
 use std::cell::RefCell;
-use std::io;
 use std::io::{BufReader, ErrorKind, Read, Seek, SeekFrom};
 use std::marker::PhantomData;
 
@@ -30,6 +25,13 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
                 "no segments provided for channel creation",
             )));
         }
+
+        // overwrite the passed in channel with the first channel in the segments
+        let channel =
+            match segments[0].get_channel(channel.group_path.as_str(), channel.path.as_str()) {
+                None => channel,
+                Some(c) => c,
+            };
 
         let channel = RefCell::new(channel);
 
@@ -62,11 +64,10 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
         let mut index = 0;
 
         for (i, s) in self.segments.iter().enumerate() {
-            if s.end_pos <= stream_pos {
-                continue;
+            if stream_pos < s.end_pos {
+                index = i;
+                break;
             }
-
-            index = i
         }
 
         return index;
@@ -94,6 +95,7 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
         // if we're past the channel's end pos for the segment, move to the end of the segment and
         // recursively call this function - setting the new channel's raw index and calculating
         // start and end pos if needed
+        let stream_pos = self.reader.stream_position()?;
 
         if stream_pos >= self.channel.borrow().end_pos {
             self.reader.seek(SeekFrom::Start(current_segment.end_pos))?;
@@ -103,6 +105,8 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             };
 
             if current_segment.has_new_obj_list() {
+                // we can error out here because if this is a new segment, but that segment doesn't
+                // have the channels we want, we need to error out
                 let channels = match current_segment
                     .groups
                     .get(&self.channel.borrow().group_path)
@@ -116,12 +120,12 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
                     Some(c) => c,
                 };
 
-                match channel_map.get(&self.channel.borrow().path) {
+                let channel = match channel_map.get(&self.channel.borrow().path) {
                     None => return Err(ChannelDoesNotExist()),
-                    Some(channel) => {
-                        self.channel.swap(&RefCell::new(channel));
-                    }
+                    Some(channel) => channel,
                 };
+
+                self.channel.swap(&RefCell::new(channel));
             }
 
             // TODO: check new segment if has new obj list, if does, can ignore this
@@ -146,14 +150,15 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e)
+                    _ => println!("error reading next value in channel: {:?}", e),
                 }
 
-                return None
-            },
+                return None;
+            }
             _ => (),
         }
 
+        let stream_pos = self.reader.stream_position();
         let segment_index = self.current_segment_index();
         let current_segment = match self.segments.get(segment_index) {
             None => return None,
@@ -170,7 +175,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
                     // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e)
+                    _ => println!("error reading value from file ${:?}", e),
                 }
 
                 return None;

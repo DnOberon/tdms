@@ -39,10 +39,11 @@ fn main() {
                 }
             };
 
-            for _ in 0..10 {
-                let value = full_channel_iterator.next();
-                println!("{:?}", value.unwrap());
-
+            for (i, value) in full_channel_iterator.enumerate() {
+                if i > 10 {
+                    //break;
+                };
+                println!("{:?}", value);
             }
 
             break;

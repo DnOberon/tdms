@@ -57,7 +57,10 @@ impl Segment {
     /// You will see an InvalidSegment error return if the reader position isn't correct as the first
     /// byte read will not be the correct tag for a segment. The segment will hold on to the original
     /// reader in order to be able to return data not read into memory
-    pub fn new<R: Read + Seek>(r: &mut R) -> Result<Self, TdmsError> {
+    pub fn new<R: Read + Seek>(
+        r: &mut R,
+        previous_segment: Option<&Segment>,
+    ) -> Result<Self, TdmsError> {
         let start_pos = r.stream_position()?;
         let mut lead_in = [0; 28];
 
@@ -91,10 +94,36 @@ impl Segment {
         let mut data_pos: u64 = start_pos + lead_in.raw_data_offset;
         let mut interleaved_total_size: u64 = 0;
 
-        match &metadata {
+        match &mut metadata {
             Some(metadata) => {
-                for obj in &metadata.objects {
+                for obj in &mut metadata.objects {
+                    let path = obj.object_path.clone();
+                    let paths: Vec<&str> = path.split("/").collect();
                     let mut data_type: TdmsDataType = TdmsDataType::Void;
+
+                    if previous_segment.is_some()
+                        && obj.raw_data_index.is_none()
+                        && obj.daqmx_data_index.is_none()
+                    {
+                        match previous_segment
+                            .unwrap()
+                            .get_channel(rem_quotes(paths[1]), rem_quotes(paths[2]))
+                        {
+                            None => {}
+                            Some(c) => {
+                                obj.raw_data_index = match &c.raw_data_index {
+                                    None => None,
+                                    Some(r) => Some(r.clone()),
+                                };
+
+                                obj.daqmx_data_index = match &c.daqmx_data_index {
+                                    None => None,
+                                    Some(d) => Some(d.clone()),
+                                }
+                            }
+                        }
+                    }
+
                     match &obj.raw_data_index {
                         None => {}
                         Some(index) => data_type = index.data_type,
@@ -107,9 +136,6 @@ impl Segment {
 
                     // add to the total interleaved size so we can calculate the offset later if needed
                     interleaved_total_size += TdmsDataType::get_size(data_type) as u64;
-
-                    let path = obj.object_path.clone();
-                    let paths: Vec<&str> = path.split("/").collect();
 
                     if paths.len() >= 2 && paths[1] != "" {
                         if !groups.contains_key(rem_quotes(paths[1])) {
@@ -174,23 +200,19 @@ impl Segment {
                         };
 
                         match map {
-                            Some(map) => match map {
-                                Some(map) => match data_type {
-                                    TdmsDataType::Void => {}
-                                    _ => {
+                            Some(map) => {
+                                match map {
+                                    Some(map) => {
                                         map.insert(rem_quotes(paths[2]).to_string(), channel);
                                     }
-                                },
-                                None => match data_type {
-                                    TdmsDataType::Void => {}
-                                    _ => {
+                                    None => {
                                         groups.insert(
-                                            rem_quotes(paths[1]).to_string(),
-                                            Some(indexmap! {rem_quotes(paths[2]).to_string() => channel}),
-                                        );
+                                    rem_quotes(paths[1]).to_string(),
+                                    Some(indexmap! {rem_quotes(paths[2]).to_string() => channel}),
+                                );
                                     }
-                                },
-                            },
+                                }
+                            }
                             None => (),
                         }
                     }
@@ -258,6 +280,34 @@ impl Segment {
     /// this function is not accurate unless the lead in portion of the segment has been read
     pub fn has_new_obj_list(&self) -> bool {
         return self.lead_in.table_of_contents & K_TOC_NEW_OBJ_LIST != 0;
+    }
+
+    pub fn get_channel_mut(&mut self, group_path: &str, path: &str) -> Option<&mut Channel> {
+        let group = match self.groups.get_mut(group_path) {
+            None => return None,
+            Some(g) => g,
+        };
+
+        let channels = match group {
+            None => return None,
+            Some(c) => c,
+        };
+
+        return channels.get_mut(path);
+    }
+
+    pub fn get_channel(&self, group_path: &str, path: &str) -> Option<&Channel> {
+        let group = match self.groups.get(group_path) {
+            None => return None,
+            Some(g) => g,
+        };
+
+        let channels = match group {
+            None => return None,
+            Some(c) => c,
+        };
+
+        return channels.get(path);
     }
 }
 

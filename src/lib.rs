@@ -101,9 +101,11 @@ impl<'a> TDMSFile<'a> {
         let file = File::open(path)?;
         let mut reader = BufReader::with_capacity(4096, file);
         let mut segments: Vec<Segment> = vec![];
+        let mut i = 0;
 
         loop {
-            let segment = Segment::new(&mut reader)?;
+            let previous_segment = if i == 0 { None } else { segments.get(i - 1) };
+            let segment = Segment::new(&mut reader, previous_segment)?;
 
             if segment.end_pos == metadata.len() {
                 segments.push(segment);
@@ -112,6 +114,7 @@ impl<'a> TDMSFile<'a> {
 
             reader.seek(SeekFrom::Start(segment.end_pos))?;
             segments.push(segment);
+            i += 1;
         }
 
         return Ok(TDMSFile { segments, path });
