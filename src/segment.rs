@@ -1,4 +1,5 @@
 use crate::data_type::{TDMSValue, TdmsDataType};
+use crate::TdmsError::NotImplemented;
 use crate::{to_i32, to_u32, to_u64};
 use crate::{
     Big, General, InvalidDAQmxDataIndex, InvalidSegment, Little, StringConversionError, TdmsError,
@@ -49,8 +50,12 @@ pub struct Channel {
     pub properties: Vec<MetadataProperty>,
     pub start_pos: u64,
     pub end_pos: u64,
+    pub positions: Vec<ChannelPositions>,
     pub interleaved_offset: u64,
 }
+
+#[derive(Clone, Debug)]
+pub struct ChannelPositions(u64, u64);
 
 impl Segment {
     /// `new` expects a reader who's cursor position is at the start of a new TDMS segment.
@@ -69,7 +74,7 @@ impl Segment {
         let lead_in = LeadIn::from_bytes(&lead_in)?;
 
         // calculate the end position by taking the start and adding the offset plus lead in bytes
-        let end_pos = lead_in.next_segment_offset + 28 + start_pos;
+        let mut end_pos = lead_in.next_segment_offset + 28 + start_pos;
 
         let endianness = if lead_in.table_of_contents & K_TOC_BIG_ENDIAN != 0 {
             Big
@@ -93,6 +98,7 @@ impl Segment {
         // set start and end thresholds of the channel's data itself
         let mut data_pos: u64 = start_pos + lead_in.raw_data_offset;
         let mut interleaved_total_size: u64 = 0;
+        let mut chunk_size: u64 = 0;
 
         match &mut metadata {
             Some(metadata) => {
@@ -164,6 +170,7 @@ impl Segment {
                                         // but we still need to iterate the main position to the end
                                         // of the chunk
                                         data_pos = data_pos + index.number_of_bytes.unwrap();
+                                        chunk_size += index.number_of_bytes.unwrap();
                                     } else {
                                         data_pos = data_pos
                                             + (type_size as u64
@@ -171,6 +178,9 @@ impl Segment {
                                                 * index.number_of_values);
 
                                         end_pos = data_pos.clone();
+                                        chunk_size += type_size as u64
+                                            * index.array_dimension as u64
+                                            * index.number_of_values
                                     }
                                 }
 
@@ -192,6 +202,7 @@ impl Segment {
                             raw_data_index,
                             daqmx_data_index,
                             properties: obj.properties.clone(),
+                            positions: vec![ChannelPositions(start_pos, end_pos)],
                             start_pos,
                             end_pos,
                             // this will be calculated later as we need all the channels information
@@ -242,6 +253,56 @@ impl Segment {
                 }
             }
         }
+
+        // now we need to iterate yet again in order to build the start/end positions of each chunk
+        for (_, channels) in groups.iter_mut() {
+            match channels {
+                None => continue,
+                Some(channels) => {
+                    for (_, channel) in channels.iter_mut() {
+                        match channel.positions.get_mut(0) {
+                            Some(p) => {
+                                let ChannelPositions(start, end) = p;
+
+                                loop {
+                                    let mut new_end_pos: u64 = 0;
+                                    *start += chunk_size;
+
+                                    if start < &mut end_pos {
+                                        match &channel.raw_data_index {
+                                            None => {}
+                                            Some(index) => {
+                                                // if we're interleave, calculate the right end spot
+                                                if lead_in.table_of_contents
+                                                    & K_TOC_INTERLEAVED_DATA
+                                                    != 0
+                                                {
+                                                } else {
+                                                }
+                                            }
+                                        }
+
+                                        match channel.daqmx_data_index {
+                                            None => {}
+                                            Some(_) => {
+                                                return Err(NotImplemented(String::from(
+                                                    "DAQmx data processing",
+                                                )))
+                                            }
+                                        }
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                            None => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        //
 
         return Ok(Segment {
             lead_in,
