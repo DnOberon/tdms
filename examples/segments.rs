@@ -39,14 +39,7 @@ fn main() {
                 }
             };
 
-            for (i, value) in full_channel_iterator.enumerate() {
-                if i > 10 {
-                    //break;
-                };
-                println!("{:?}", value);
-            }
-
-            break;
+            println!("{:?}", full_channel_iterator.count());
         }
     }
 }

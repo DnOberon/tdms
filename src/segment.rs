@@ -48,14 +48,12 @@ pub struct Channel {
     pub raw_data_index: Option<RawDataIndex>,
     pub daqmx_data_index: Option<DAQmxDataIndex>,
     pub properties: Vec<MetadataProperty>,
-    pub start_pos: u64,
-    pub end_pos: u64,
-    pub positions: Vec<ChannelPositions>,
+    pub chunk_positions: Vec<ChannelPositions>,
     pub interleaved_offset: u64,
 }
 
-#[derive(Clone, Debug)]
-pub struct ChannelPositions(u64, u64);
+#[derive(Clone, Debug, Copy)]
+pub struct ChannelPositions(pub u64, pub u64);
 
 impl Segment {
     /// `new` expects a reader who's cursor position is at the start of a new TDMS segment.
@@ -66,7 +64,7 @@ impl Segment {
         r: &mut R,
         previous_segment: Option<&Segment>,
     ) -> Result<Self, TdmsError> {
-        let start_pos = r.stream_position()?;
+        let segment_start_pos = r.stream_position()?;
         let mut lead_in = [0; 28];
 
         r.read(&mut lead_in[..])?;
@@ -74,7 +72,7 @@ impl Segment {
         let lead_in = LeadIn::from_bytes(&lead_in)?;
 
         // calculate the end position by taking the start and adding the offset plus lead in bytes
-        let mut end_pos = lead_in.next_segment_offset + 28 + start_pos;
+        let mut segment_end_pos = lead_in.next_segment_offset + 28 + segment_start_pos;
 
         let endianness = if lead_in.table_of_contents & K_TOC_BIG_ENDIAN != 0 {
             Big
@@ -96,7 +94,7 @@ impl Segment {
 
         // this variable will tell us where we're at in the raw data of the channel, allowing us to
         // set start and end thresholds of the channel's data itself
-        let mut data_pos: u64 = start_pos + lead_in.raw_data_offset;
+        let mut data_pos: u64 = segment_start_pos + lead_in.raw_data_offset;
         let mut interleaved_total_size: u64 = 0;
         let mut chunk_size: u64 = 0;
 
@@ -202,9 +200,7 @@ impl Segment {
                             raw_data_index,
                             daqmx_data_index,
                             properties: obj.properties.clone(),
-                            positions: vec![ChannelPositions(start_pos, end_pos)],
-                            start_pos,
-                            end_pos,
+                            chunk_positions: vec![ChannelPositions(start_pos, end_pos)],
                             // this will be calculated later as we need all the channels information
                             // prior to calculating this offset
                             interleaved_offset: 0,
@@ -233,8 +229,6 @@ impl Segment {
         }
 
         if lead_in.table_of_contents & K_TOC_INTERLEAVED_DATA != 0 {
-            let mut total_size: u64 = 0;
-
             for (_, channels) in groups.iter_mut() {
                 match channels {
                     None => continue,
@@ -244,10 +238,16 @@ impl Segment {
 
                             // offset tells the iterator how many bytes to move to the next value
                             channel.interleaved_offset = interleaved_total_size - size as u64;
-                            // update the end_pos_threshold now that we have an idea of setup
-                            channel.end_pos = end_pos - channel.interleaved_offset + total_size;
+                            // update the end_pos_threshold  now that we have an idea of setup
+                            match channel.chunk_positions.get_mut(0) {
+                                None => (),
+                                Some(positions) => {
+                                    positions.1 = chunk_size - channel.interleaved_offset
+                                        + interleaved_total_size
+                                }
+                            }
 
-                            total_size += size as u64;
+                            interleaved_total_size += size as u64;
                         }
                     }
                 }
@@ -260,42 +260,33 @@ impl Segment {
                 None => continue,
                 Some(channels) => {
                     for (_, channel) in channels.iter_mut() {
-                        match channel.positions.get_mut(0) {
-                            Some(p) => {
-                                let ChannelPositions(start, end) = p;
-
-                                loop {
-                                    let mut new_end_pos: u64 = 0;
-                                    *start += chunk_size;
-
-                                    if start < &mut end_pos {
-                                        match &channel.raw_data_index {
-                                            None => {}
-                                            Some(index) => {
-                                                // if we're interleave, calculate the right end spot
-                                                if lead_in.table_of_contents
-                                                    & K_TOC_INTERLEAVED_DATA
-                                                    != 0
-                                                {
-                                                } else {
-                                                }
-                                            }
-                                        }
-
-                                        match channel.daqmx_data_index {
-                                            None => {}
-                                            Some(_) => {
-                                                return Err(NotImplemented(String::from(
-                                                    "DAQmx data processing",
-                                                )))
-                                            }
-                                        }
-                                    } else {
-                                        break;
+                        let mut i = 0;
+                        loop {
+                            let ChannelPositions(prev_start, prev_end) =
+                                match channel.chunk_positions.get(i) {
+                                    None => {
+                                        return Err(General(String::from(
+                                            "unable to fetch previous chunk postions",
+                                        )))
                                     }
-                                }
+                                    Some(p) => p,
+                                };
+
+                            let mut new_start = prev_start + chunk_size;
+                            let mut new_end = prev_end + chunk_size;
+
+                            if new_start > segment_end_pos {
+                                break;
                             }
-                            None => {}
+
+                            if new_end > segment_end_pos {
+                                new_end = segment_end_pos;
+                            }
+
+                            channel
+                                .chunk_positions
+                                .push(ChannelPositions(new_start, new_end));
+                            i += 1;
                         }
                     }
                 }
@@ -307,9 +298,9 @@ impl Segment {
         return Ok(Segment {
             lead_in,
             metadata,
-            start_pos,
+            start_pos: segment_start_pos,
             // lead in plus offset
-            end_pos,
+            end_pos: segment_end_pos,
             groups,
         });
     }

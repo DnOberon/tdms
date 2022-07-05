@@ -7,7 +7,7 @@ use std::path::Path;
 fn can_read_lead_in() {
     let mut f = File::open(Path::new("data/standard.tdms")).expect("Failure to open file");
 
-    let segment: Segment = match Segment::new(&mut f) {
+    let segment: Segment = match Segment::new(&mut f, None) {
         Ok(s) => s,
         Err(e) => panic!("{:?}", e),
     };
