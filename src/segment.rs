@@ -176,9 +176,9 @@ impl Segment {
                                                 * index.number_of_values);
 
                                         end_pos = data_pos.clone();
-                                        chunk_size += type_size as u64
+                                        chunk_size += (type_size as u64
                                             * index.array_dimension as u64
-                                            * index.number_of_values
+                                            * index.number_of_values)
                                     }
                                 }
 
@@ -266,7 +266,7 @@ impl Segment {
                                 match channel.chunk_positions.get(i) {
                                     None => {
                                         return Err(General(String::from(
-                                            "unable to fetch previous chunk postions",
+                                            "unable to fetch previous chunk positions",
                                         )))
                                     }
                                     Some(p) => p,

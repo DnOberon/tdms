@@ -163,7 +163,7 @@ impl<'a> TDMSFile<'a> {
         channel: &'a Channel,
     ) -> Result<ChannelDataIter<f64, File>, TdmsError> {
         let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
-        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+        let reader = BufReader::with_capacity(8192, File::open(self.path)?);
 
         return ChannelDataIter::new(vec, channel, reader);
     }

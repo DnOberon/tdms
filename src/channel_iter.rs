@@ -84,15 +84,48 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             return Ok(positions.clone());
         }
 
-        return Err(General(String::from(
-            "unable to retrieve channel positions",
-        )));
+        let index = self.current_segment_index();
+
+        let current_segment = match self.segments.get(index) {
+            None => return Err(EndOfSegments()),
+            Some(s) => s,
+        };
+
+        self.reader.seek(SeekFrom::Start(current_segment.end_pos))?;
+        let current_segment = match self.segments.get(index + 1) {
+            None => return Err(EndOfSegments()),
+            Some(s) => s,
+        };
+
+        // we can error out here because if this is a new segment, but that segment doesn't
+        // have the channels we want, we need to error out
+        let channels = match current_segment
+            .groups
+            .get(&self.channel.borrow().group_path)
+        {
+            None => return Err(GroupDoesNotExist()),
+            Some(g) => g,
+        };
+
+        let channel_map = match channels {
+            None => return Err(ChannelDoesNotExist()),
+            Some(c) => c,
+        };
+
+        let channel = match channel_map.get(&self.channel.borrow().path) {
+            None => return Err(ChannelDoesNotExist()),
+            Some(channel) => channel,
+        };
+
+        self.channel.swap(&RefCell::new(channel));
+
+        return self.current_positions();
     }
 
     /// advance_reader_to_next moves the internal BufReader<R> to the next valid data value depending
     /// on data type, index, current pos. etc - this function also handles iterating to the next
     /// segment if necessary
-    fn advance_reader_to_next(&mut self) -> Result<(), TdmsError> {
+    fn advance_reader_to_next(&mut self) -> Result<&Segment, TdmsError> {
         let index = self.current_segment_index();
         let ChannelPositions(start_pos, end_pos) = self.current_positions()?;
 
@@ -121,34 +154,27 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
                 Some(s) => s,
             };
 
-            if current_segment.has_new_obj_list() {
-                // we can error out here because if this is a new segment, but that segment doesn't
-                // have the channels we want, we need to error out
-                let channels = match current_segment
-                    .groups
-                    .get(&self.channel.borrow().group_path)
-                {
-                    None => return Err(GroupDoesNotExist()),
-                    Some(g) => g,
-                };
+            // we can error out here because if this is a new segment, but that segment doesn't
+            // have the channels we want, we need to error out
+            let channels = match current_segment
+                .groups
+                .get(&self.channel.borrow().group_path)
+            {
+                None => return Err(GroupDoesNotExist()),
+                Some(g) => g,
+            };
 
-                let channel_map = match channels {
-                    None => return Err(ChannelDoesNotExist()),
-                    Some(c) => c,
-                };
+            let channel_map = match channels {
+                None => return Err(ChannelDoesNotExist()),
+                Some(c) => c,
+            };
 
-                let channel = match channel_map.get(&self.channel.borrow().path) {
-                    None => return Err(ChannelDoesNotExist()),
-                    Some(channel) => channel,
-                };
+            let channel = match channel_map.get(&self.channel.borrow().path) {
+                None => return Err(ChannelDoesNotExist()),
+                Some(channel) => channel,
+            };
 
-                self.channel.swap(&RefCell::new(channel));
-            }
-
-            // TODO: check new segment if has new obj list, if does, can ignore this
-            // TODO: check new segment if has info on the current channel, if it does, check the data index if data index new, use to calculate start and end pos
-            // TODO: if indexes are not new, use current channel's raw data index to calculate start and end pos
-            // TODO: update the stored channel's start and end pos
+            self.channel.swap(&RefCell::new(channel));
 
             return self.advance_reader_to_next();
         }
@@ -171,7 +197,7 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
         let stream_pos = self.reader.stream_position()?;
 
         if stream_pos >= start_pos && stream_pos < end_pos {
-            return Ok(());
+            return Ok(current_segment);
         }
 
         return self.advance_reader_to_next();
@@ -184,7 +210,8 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
         // next segment TODO: get a passed in logger and output to that logger channel
-        match self.advance_reader_to_next() {
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
@@ -193,13 +220,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
 
                 return None;
             }
-            _ => (),
-        }
-
-        let segment_index = self.current_segment_index();
-        let current_segment = match self.segments.get(segment_index) {
-            None => return None,
-            Some(c) => c,
+            Ok(s) => s.endianess(),
         };
 
         // to check the required byte size of this channel's data type, look
@@ -219,7 +240,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
             }
         }
 
-        let value = match current_segment.endianess() {
+        let value = match endianess {
             Endianness::Little => Some(f64::from_le_bytes(buf)),
             Endianness::Big => Some(f64::from_be_bytes(buf)),
         };
