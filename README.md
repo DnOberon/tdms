@@ -9,6 +9,7 @@
 - Read files with DAQmx data and data indices
 - Read all segments in file, along with their groups and channels (per segment only)
 - Read all raw data contained in all segments in file (as a `Vec<u8>` only at the present time)
+- Iterator for Long Double channels, non-interleaved and non DAQmx data only
 
 
 ### Planned Features
@@ -40,6 +41,7 @@ fn main() {
         // fetch an IndexSet of the group's channels
         let channels = file.channels(&group);
 
+        let mut i = 0;
         for (_, channel) in channels {
             // once you know the channel's full path (group + channel) you can ask for the full
             // channel object. In order to fetch a channel you must call the proper channel func
@@ -60,9 +62,9 @@ fn main() {
                 }
             };
 
-            let value = full_channel_iterator.next();
-            println!("{:?}", value);
-            break;
+            println!("{:?}", full_channel_iterator.count());
+
+            i += 1;
         }
     }
 }

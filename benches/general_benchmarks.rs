@@ -1,10 +1,11 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use pprof::criterion::{Output, PProfProfiler};
 use std::path::Path;
 use std::time::Duration;
 use tdms::data_type::TdmsDataType;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("segment read, data", |b| {
+    c.bench_function("segment_read", |b| {
         b.iter(|| {
             let file = match tdms::TDMSFile::from_path(Path::new("data/standard.tdms")) {
                 Ok(f) => f,
@@ -45,5 +46,5 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group! {name = benches; config = Criterion::default().measurement_time(Duration::from_secs(60)).sample_size(10); targets = criterion_benchmark}
+criterion_group! {name = benches; config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(Duration::from_secs(60)).sample_size(10); targets = criterion_benchmark}
 criterion_main!(benches);

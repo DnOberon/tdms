@@ -19,6 +19,7 @@ fn main() {
         // fetch an IndexSet of the group's channels
         let channels = file.channels(&group);
 
+        let mut i = 0;
         for (_, channel) in channels {
             // once you know the channel's full path (group + channel) you can ask for the full
             // channel object. In order to fetch a channel you must call the proper channel func
@@ -40,6 +41,8 @@ fn main() {
             };
 
             println!("{:?}", full_channel_iterator.count());
+
+            i += 1;
         }
     }
 }

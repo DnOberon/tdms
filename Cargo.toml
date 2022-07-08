@@ -1,7 +1,7 @@
 [package]
 name = "tdms"
 description = "A LabView TDMS file parser written in Rust"
-version = "0.1.9"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/DnOberon/tdms"
@@ -16,6 +16,7 @@ extended = "0.1.0"
 fixed = "1.15.0"
 
 [dev-dependencies]
+pprof = { version = "0.10.0", features = ["flamegraph", "criterion"] }
 criterion = "0.3"
 
 
