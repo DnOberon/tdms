@@ -1,4 +1,3 @@
-use crate::data_type::TdmsDataType;
 use crate::segment::{Channel, ChannelPositions};
 use crate::TdmsError::{ChannelDoesNotExist, EndOfSegments, GroupDoesNotExist};
 use crate::{Endianness, General, Segment, TdmsError};
@@ -12,6 +11,7 @@ pub struct ChannelDataIter<'a, T, R: Read + Seek> {
     current_pos: RefCell<ChannelPositions>,
     segments: Vec<&'a Segment>,
     reader: BufReader<R>,
+    current_segment_index: RefCell<usize>,
     _mask: PhantomData<T>,
 }
 
@@ -19,7 +19,7 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
     pub fn new(
         segments: Vec<&'a Segment>,
         channel: &'a Channel,
-        mut reader: BufReader<R>,
+        reader: BufReader<R>,
     ) -> Result<Self, TdmsError> {
         if segments.len() <= 0 {
             return Err(General(String::from(
@@ -46,6 +46,7 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             channel,
             segments,
             reader,
+            current_segment_index: RefCell::new(0),
             _mask: Default::default(),
         };
 
@@ -61,30 +62,9 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
         return Ok(iter);
     }
 
-    /// segment_index_for_reader returns the current segment for the reader's current position
-    fn current_segment_index(&mut self) -> usize {
-        let stream_pos = match self.reader.stream_position() {
-            Ok(p) => p,
-            Err(_) => 0,
-        };
-
-        let mut index = 0;
-
-        for (i, s) in self.segments.iter().enumerate() {
-            if stream_pos < s.end_pos {
-                index = i;
-                break;
-            }
-        }
-
-        return index;
-    }
-
-    fn current_positions(&mut self) -> Result<ChannelPositions, TdmsError> {
-        let stream_pos = self.reader.stream_position()?;
-
+    fn current_positions(&mut self, stream_pos: u64) -> Result<(), TdmsError> {
         if stream_pos < self.current_pos.borrow().1 {
-            return Ok(self.current_pos.borrow().clone());
+            return Ok(());
         }
 
         for positions in self.channel.borrow().chunk_positions.iter() {
@@ -93,10 +73,10 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             }
 
             self.current_pos.swap(&RefCell::new(positions.clone()));
-            return Ok(positions.clone());
+            return Ok(());
         }
 
-        let index = self.current_segment_index();
+        let index = self.current_segment_index.take();
 
         let mut current_segment = match self.segments.get(index) {
             None => return Err(EndOfSegments()),
@@ -107,7 +87,10 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             self.reader.seek(SeekFrom::Start(current_segment.end_pos))?;
             current_segment = match self.segments.get(index + 1) {
                 None => return Err(EndOfSegments()),
-                Some(s) => s,
+                Some(s) => {
+                    self.current_segment_index.swap(&RefCell::new(index + 1));
+                    s
+                }
             };
         }
 
@@ -139,7 +122,7 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             }
 
             self.current_pos.swap(&RefCell::new(positions.clone()));
-            return Ok(positions.clone());
+            return Ok(());
         }
 
         return Err(EndOfSegments());
@@ -149,32 +132,37 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
     /// on data type, index, current pos. etc - this function also handles iterating to the next
     /// segment if necessary
     fn advance_reader_to_next(&mut self) -> Result<&Segment, TdmsError> {
-        let index = self.current_segment_index();
-        let ChannelPositions(start_pos, end_pos) = self.current_positions()?;
+        let mut stream_pos = self.reader.stream_position()?;
+        self.current_positions(stream_pos)?;
+        let start_pos = self.current_pos.borrow().0;
+        let end_pos = self.current_pos.borrow().1;
+
+        let index = self.current_segment_index.clone().take();
 
         let current_segment = match self.segments.get(index) {
             None => return Err(EndOfSegments()),
             Some(s) => s,
         };
 
-        let stream_pos = self.reader.stream_position()?;
-
         // if we're not past data start, move us there first
         if stream_pos < current_segment.start_pos + current_segment.lead_in.raw_data_offset
             || stream_pos < start_pos
         {
             self.reader.seek(SeekFrom::Start(start_pos))?;
+            stream_pos = start_pos;
         }
 
-        let stream_pos = self.reader.stream_position()?;
         // if we're past the channel's end pos for the segment, move to the end of segment and
         // recursively call this function - setting the new channel's raw index and calculating
         // start and end pos if needed
-        if stream_pos >= end_pos || stream_pos >= current_segment.end_pos {
+        if stream_pos >= current_segment.end_pos {
             self.reader.seek(SeekFrom::Start(current_segment.end_pos))?;
             let current_segment = match self.segments.get(index + 1) {
                 None => return Err(EndOfSegments()),
-                Some(s) => s,
+                Some(s) => {
+                    self.current_segment_index.swap(&RefCell::new(index + 1));
+                    s
+                }
             };
 
             // we can error out here because if this is a new segment, but that segment doesn't
@@ -211,10 +199,9 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             return self.advance_reader_to_next();
         }
 
-        let stream_pos = self.reader.stream_position()?;
-
         if stream_pos < start_pos {
             self.reader.seek(SeekFrom::Start(start_pos))?;
+            stream_pos = start_pos;
         }
 
         let stream_pos = self.reader.stream_position()?;

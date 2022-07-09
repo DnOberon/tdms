@@ -1,5 +1,4 @@
 use crate::data_type::{TDMSValue, TdmsDataType};
-use crate::TdmsError::NotImplemented;
 use crate::{to_i32, to_u32, to_u64};
 use crate::{
     Big, General, InvalidDAQmxDataIndex, InvalidSegment, Little, StringConversionError, TdmsError,
@@ -32,6 +31,7 @@ pub struct Segment {
     pub start_pos: u64,
     pub end_pos: u64,
     pub groups: IndexMap<GroupPath, Option<IndexMap<ChannelPath, Channel>>>,
+    pub chunk_size: u64,
 }
 
 /// GroupPath is a simple alias to allow our function signatures to be more telling
@@ -302,6 +302,7 @@ impl Segment {
             // lead in plus offset
             end_pos: segment_end_pos,
             groups,
+            chunk_size,
         });
     }
 
