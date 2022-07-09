@@ -157,6 +157,8 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
         // start and end pos if needed
         if stream_pos >= current_segment.end_pos {
             self.reader.seek(SeekFrom::Start(current_segment.end_pos))?;
+            stream_pos += current_segment.end_pos;
+
             let current_segment = match self.segments.get(index + 1) {
                 None => return Err(EndOfSegments()),
                 Some(s) => {
@@ -195,6 +197,7 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             self.reader.seek(SeekFrom::Current(
                 self.channel.borrow().interleaved_offset as i64,
             ))?;
+            stream_pos += self.channel.borrow().interleaved_offset;
 
             return self.advance_reader_to_next();
         }
@@ -203,8 +206,6 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             self.reader.seek(SeekFrom::Start(start_pos))?;
             stream_pos = start_pos;
         }
-
-        let stream_pos = self.reader.stream_position()?;
 
         if stream_pos >= start_pos && stream_pos < end_pos {
             return Ok(current_segment);
