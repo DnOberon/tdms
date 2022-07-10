@@ -348,6 +348,6 @@ impl TDMSValue {
 }
 
 pub struct TdmsTimestamp {
-    time_since_epoch: i64,
-    fractions_of_second: u64,
+    pub time_since_epoch: i64,
+    pub fractions_of_second: u64,
 }

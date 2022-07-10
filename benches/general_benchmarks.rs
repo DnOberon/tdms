@@ -32,7 +32,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                         }
                     };
 
-                    let mut full_channel_iterator = match full_channel {
+                    let full_channel_iterator = match full_channel {
                         Ok(i) => i,
                         Err(e) => {
                             panic!("{:?}", e)

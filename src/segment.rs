@@ -72,7 +72,7 @@ impl Segment {
         let lead_in = LeadIn::from_bytes(&lead_in)?;
 
         // calculate the end position by taking the start and adding the offset plus lead in bytes
-        let mut segment_end_pos = lead_in.next_segment_offset + 28 + segment_start_pos;
+        let segment_end_pos = lead_in.next_segment_offset + 28 + segment_start_pos;
 
         let endianness = if lead_in.table_of_contents & K_TOC_BIG_ENDIAN != 0 {
             Big
@@ -176,9 +176,9 @@ impl Segment {
                                                 * index.number_of_values);
 
                                         end_pos = data_pos.clone();
-                                        chunk_size += (type_size as u64
+                                        chunk_size += type_size as u64
                                             * index.array_dimension as u64
-                                            * index.number_of_values)
+                                            * index.number_of_values
                                     }
                                 }
 
@@ -272,7 +272,7 @@ impl Segment {
                                     Some(p) => p,
                                 };
 
-                            let mut new_start = prev_start + chunk_size;
+                            let new_start = prev_start + chunk_size;
                             let mut new_end = prev_end + chunk_size;
 
                             if new_start > segment_end_pos {
