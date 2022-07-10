@@ -9,7 +9,13 @@
 - Read files with DAQmx data and data indices
 - Read all segments in file, along with their groups and channels (per segment only)
 - Read all raw data contained in all segments in file (as a `Vec<u8>` only at the present time)
-- Iterator for Long Double channels, non-interleaved and non DAQmx data only
+
+Here is a list of all supported iterators for TDMS data types. If completely unlisted, then that type is not supported yet. Check back frequently as this list will grow quickly.
+
+| Data Type   | Standard | Interleaved        | DAQmx   |
+|-------------|----------|--------------------|---------|
+| Long Double | &check;   | &check; - untested | &cross; |
+
 
 
 ### Planned Features
