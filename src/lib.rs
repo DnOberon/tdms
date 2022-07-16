@@ -8,29 +8,7 @@
 //! - Read files with DAQmx data and data indices
 //! - Read all segments in file, along with their groups and channels (per segment only)
 //! - Read all raw data contained in all segments in file (as a `Vec<u8>` only at the present time)
-//!
-//! Here is a list of all supported iterators for TDMS data types. If completely unlisted, then that type is not supported yet. Check back frequently as this list will grow quickly.
-//!
-//! | Data Type                 | Standard           | Interleaved        | DAQmx   |
-//! |---------------------------|--------------------|--------------------|---------|
-//! | Double Float              | &check;            | &check; - untested | &cross; |
-//! | Single Float              | &check; - untested | &check; - untested | &cross; |
-//! | Single Float with unit    | &check; - untested | &check; - untested | &cross; |
-//! | Double Float with unit    | &check; - untested | &check; - untested | &cross; |
-//! | Complex Single Float      | &check; - untested | &check; - untested | &cross; |
-//! | Complex Double Float      | &check; - untested | &check; - untested | &cross; |
-//! | I8                        | &check; - untested | &check; - untested | &cross; |
-//! | I32                       | &check; - untested | &check; - untested | &cross; |
-//! | I64                       | &check; - untested | &check; - untested | &cross; |
-//! | U8                        | &check; - untested | &check; - untested | &cross; |
-//! | U16                       | &check; - untested | &check; - untested | &cross; |
-//! | U32                       | &check; - untested | &check; - untested | &cross; |
-//! | U64                       | &check; - untested | &check; - untested | &cross; |
-//! | Boolean                   | &check; - untested | &check; - untested | &cross; |
-//! | Timestamp (returns tuple) | &check; - untested | &check; - untested | &cross; |
-//! | Single Float              | &check; - untested | &check; - untested | &cross; |
-//! | Single Float              | &check; - untested | &check; - untested | &cross; |
-//! | Single Float              | &check; - untested | &check; - untested | &cross; |
+//! - Logging using the `log` api - users of the library must choose and initialize the implementation, such as `env-logger`
 //!
 //! ### Planned Features
 //! - Iterators for each channel type, return native Rust values from encoded data channels

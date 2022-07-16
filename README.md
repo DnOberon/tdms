@@ -9,6 +9,7 @@
 - Read files with DAQmx data and data indices
 - Read all segments in file, along with their groups and channels (per segment only)
 - Read all raw data contained in all segments in file (as a `Vec<u8>` only at the present time)
+- Logging using the `log` api - users of the library must choose and initialize the implementation, such as `env-logger`
 
 Here is a list of all supported iterators for TDMS data types. If completely unlisted, then that type is not supported yet. Check back frequently as this list will grow quickly.
 

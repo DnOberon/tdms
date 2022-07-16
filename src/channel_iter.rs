@@ -2,6 +2,7 @@ use crate::data_type::TdmsTimestamp;
 use crate::segment::{Channel, ChannelPositions};
 use crate::TdmsError::{ChannelDoesNotExist, EndOfSegments, GroupDoesNotExist};
 use crate::{Endianness, General, Segment, TdmsError};
+use log::error;
 use std::cell::RefCell;
 use std::io::{BufReader, ErrorKind, Read, Seek, SeekFrom};
 use std::marker::PhantomData;
@@ -214,13 +215,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -237,8 +238,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -257,13 +257,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i8, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -280,8 +280,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i8, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -300,13 +299,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i16, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -323,8 +322,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i16, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -343,13 +341,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i32, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -366,8 +364,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i32, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -386,13 +383,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i64, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -409,8 +406,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i64, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -429,13 +425,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u8, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -452,8 +448,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u8, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -472,13 +467,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u16, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -495,8 +490,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u16, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -515,13 +509,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u32, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -538,8 +532,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u32, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -558,13 +551,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u64, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -581,8 +574,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u64, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -601,13 +593,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f32, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -624,8 +616,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f32, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -644,7 +635,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, bool, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
 
         // to check the required byte size of this channel's data type, look
         // at data_types.rs and the TdmsDataType enum
@@ -655,8 +646,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, bool, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -672,13 +662,13 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, TdmsTimestamp, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // advance to next value - this function handles interleaved iteration and moving to the
-        // next segment TODO: get a passed in logger and output to that logger channel
+        // next segment
         let current_segment = self.advance_reader_to_next();
         let endianess = match current_segment {
             Err(e) => {
                 match e {
                     EndOfSegments() => (),
-                    _ => println!("error reading next value in channel: {:?}", e),
+                    _ => error!("error reading next value in channel: {:?}", e),
                 }
 
                 return None;
@@ -695,8 +685,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, TdmsTimestamp, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
@@ -715,8 +704,7 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, TdmsTimestamp, R> {
             Err(e) => {
                 match e.kind() {
                     ErrorKind::UnexpectedEof => {}
-                    // TODO: bring in logger and print to  their log
-                    _ => println!("error reading value from file ${:?}", e),
+                    _ => error!("error reading value from file: {:?}", e),
                 }
 
                 return None;
