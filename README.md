@@ -12,9 +12,26 @@
 
 Here is a list of all supported iterators for TDMS data types. If completely unlisted, then that type is not supported yet. Check back frequently as this list will grow quickly.
 
-| Data Type   | Standard | Interleaved        | DAQmx   |
-|-------------|----------|--------------------|---------|
-| Long Double | &check;   | &check; - untested | &cross; |
+| Data Type                 | Standard           | Interleaved        | DAQmx   |
+|---------------------------|--------------------|--------------------|---------|
+| Double Float              | &check;            | &check; - untested | &cross; |
+| Single Float              | &check; - untested | &check; - untested | &cross; |
+| Single Float with unit    | &check; - untested | &check; - untested | &cross; |
+| Double Float with unit    | &check; - untested | &check; - untested | &cross; |
+| Complex Single Float      | &check; - untested | &check; - untested | &cross; |
+| Complex Double Float      | &check; - untested | &check; - untested | &cross; |
+| I8                        | &check; - untested | &check; - untested | &cross; |
+| I32                       | &check; - untested | &check; - untested | &cross; |
+| I64                       | &check; - untested | &check; - untested | &cross; |
+| U8                        | &check; - untested | &check; - untested | &cross; |
+| U16                       | &check; - untested | &check; - untested | &cross; |
+| U32                       | &check; - untested | &check; - untested | &cross; |
+| U64                       | &check; - untested | &check; - untested | &cross; |
+| Boolean                   | &check; - untested | &check; - untested | &cross; |
+| Timestamp (returns tuple) | &check; - untested | &check; - untested | &cross; |
+| Single Float              | &check; - untested | &check; - untested | &cross; |
+| Single Float              | &check; - untested | &check; - untested | &cross; |
+| Single Float              | &check; - untested | &check; - untested | &cross; |
 
 
 

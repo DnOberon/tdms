@@ -11,9 +11,26 @@
 //!
 //! Here is a list of all supported iterators for TDMS data types. If completely unlisted, then that type is not supported yet. Check back frequently as this list will grow quickly.
 //!
-//! | Data Type   | Standard | Interleaved        | DAQmx   |
-//! |-------------|----------|--------------------|---------|
-//! | Long Double | &check;   | &check; - untested | &cross; |
+//! | Data Type                 | Standard           | Interleaved        | DAQmx   |
+//! |---------------------------|--------------------|--------------------|---------|
+//! | Double Float              | &check;            | &check; - untested | &cross; |
+//! | Single Float              | &check; - untested | &check; - untested | &cross; |
+//! | Single Float with unit    | &check; - untested | &check; - untested | &cross; |
+//! | Double Float with unit    | &check; - untested | &check; - untested | &cross; |
+//! | Complex Single Float      | &check; - untested | &check; - untested | &cross; |
+//! | Complex Double Float      | &check; - untested | &check; - untested | &cross; |
+//! | I8                        | &check; - untested | &check; - untested | &cross; |
+//! | I32                       | &check; - untested | &check; - untested | &cross; |
+//! | I64                       | &check; - untested | &check; - untested | &cross; |
+//! | U8                        | &check; - untested | &check; - untested | &cross; |
+//! | U16                       | &check; - untested | &check; - untested | &cross; |
+//! | U32                       | &check; - untested | &check; - untested | &cross; |
+//! | U64                       | &check; - untested | &check; - untested | &cross; |
+//! | Boolean                   | &check; - untested | &check; - untested | &cross; |
+//! | Timestamp (returns tuple) | &check; - untested | &check; - untested | &cross; |
+//! | Single Float              | &check; - untested | &check; - untested | &cross; |
+//! | Single Float              | &check; - untested | &check; - untested | &cross; |
+//! | Single Float              | &check; - untested | &check; - untested | &cross; |
 //!
 //! ### Planned Features
 //! - Iterators for each channel type, return native Rust values from encoded data channels
@@ -93,6 +110,7 @@ use std::path::Path;
 
 pub mod error;
 use crate::channel_iter::ChannelDataIter;
+use crate::data_type::TdmsTimestamp;
 use crate::TdmsError::{
     General, InvalidDAQmxDataIndex, InvalidSegment, StringConversionError, UnknownDataType,
 };
@@ -182,6 +200,156 @@ impl<'a> TDMSFile<'a> {
         &self,
         channel: &'a Channel,
     ) -> Result<ChannelDataIter<f64, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_single_float(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<f32, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_complex_double_float(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<f64, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_complex_single_float(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<f32, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_double_float_unit(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<f64, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_single_float_unit(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<f32, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_i8(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<i8, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_i16(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<i16, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_i32(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<i32, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_i64(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<i64, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_u8(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<u8, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_u16(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<u16, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_u32(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<u32, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_u64(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<u64, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_bool(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<bool, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
+    pub fn channel_data_timestamp(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<TdmsTimestamp, File>, TdmsError> {
         let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
         let reader = BufReader::with_capacity(4096, File::open(self.path)?);
 

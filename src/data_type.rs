@@ -347,7 +347,5 @@ impl TDMSValue {
     }
 }
 
-pub struct TdmsTimestamp {
-    pub time_since_epoch: i64,
-    pub fractions_of_second: u64,
-}
+#[derive(Clone, Debug, Copy)]
+pub struct TdmsTimestamp(pub i64, pub u64);

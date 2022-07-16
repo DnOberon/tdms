@@ -1,3 +1,4 @@
+use crate::data_type::TdmsTimestamp;
 use crate::segment::{Channel, ChannelPositions};
 use crate::TdmsError::{ChannelDoesNotExist, EndOfSegments, GroupDoesNotExist};
 use crate::{Endianness, General, Segment, TdmsError};
@@ -244,11 +245,489 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f64, R> {
             }
         }
 
-        let value = match endianess {
+        return match endianess {
             Endianness::Little => Some(f64::from_le_bytes(buf)),
             Endianness::Big => Some(f64::from_be_bytes(buf)),
         };
+    }
+}
 
-        return value;
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i8, R> {
+    type Item = i8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e),
+                }
+
+                return None;
+            }
+            Ok(s) => s.endianess(),
+        };
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 1] = [0; 1];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        return match endianess {
+            Endianness::Little => Some(i8::from_le_bytes(buf)),
+            Endianness::Big => Some(i8::from_be_bytes(buf)),
+        };
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i16, R> {
+    type Item = i16;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e),
+                }
+
+                return None;
+            }
+            Ok(s) => s.endianess(),
+        };
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 2] = [0; 2];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        return match endianess {
+            Endianness::Little => Some(i16::from_le_bytes(buf)),
+            Endianness::Big => Some(i16::from_be_bytes(buf)),
+        };
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i32, R> {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e),
+                }
+
+                return None;
+            }
+            Ok(s) => s.endianess(),
+        };
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 4] = [0; 4];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        return match endianess {
+            Endianness::Little => Some(i32::from_le_bytes(buf)),
+            Endianness::Big => Some(i32::from_be_bytes(buf)),
+        };
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, i64, R> {
+    type Item = i64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e),
+                }
+
+                return None;
+            }
+            Ok(s) => s.endianess(),
+        };
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 8] = [0; 8];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        return match endianess {
+            Endianness::Little => Some(i64::from_le_bytes(buf)),
+            Endianness::Big => Some(i64::from_be_bytes(buf)),
+        };
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u8, R> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e),
+                }
+
+                return None;
+            }
+            Ok(s) => s.endianess(),
+        };
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 1] = [0; 1];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        return match endianess {
+            Endianness::Little => Some(u8::from_le_bytes(buf)),
+            Endianness::Big => Some(u8::from_be_bytes(buf)),
+        };
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u16, R> {
+    type Item = u16;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e),
+                }
+
+                return None;
+            }
+            Ok(s) => s.endianess(),
+        };
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 2] = [0; 2];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        return match endianess {
+            Endianness::Little => Some(u16::from_le_bytes(buf)),
+            Endianness::Big => Some(u16::from_be_bytes(buf)),
+        };
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u32, R> {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e),
+                }
+
+                return None;
+            }
+            Ok(s) => s.endianess(),
+        };
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 4] = [0; 4];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        return match endianess {
+            Endianness::Little => Some(u32::from_le_bytes(buf)),
+            Endianness::Big => Some(u32::from_be_bytes(buf)),
+        };
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, u64, R> {
+    type Item = u64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e),
+                }
+
+                return None;
+            }
+            Ok(s) => s.endianess(),
+        };
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 8] = [0; 8];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        return match endianess {
+            Endianness::Little => Some(u64::from_le_bytes(buf)),
+            Endianness::Big => Some(u64::from_be_bytes(buf)),
+        };
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, f32, R> {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e),
+                }
+
+                return None;
+            }
+            Ok(s) => s.endianess(),
+        };
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 4] = [0; 4];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        return match endianess {
+            Endianness::Little => Some(f32::from_le_bytes(buf)),
+            Endianness::Big => Some(f32::from_be_bytes(buf)),
+        };
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, bool, R> {
+    type Item = bool;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 1] = [0; 1];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        return Some(buf[0] != 0);
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, TdmsTimestamp, R> {
+    type Item = TdmsTimestamp;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment TODO: get a passed in logger and output to that logger channel
+        let current_segment = self.advance_reader_to_next();
+        let endianess = match current_segment {
+            Err(e) => {
+                match e {
+                    EndOfSegments() => (),
+                    _ => println!("error reading next value in channel: {:?}", e),
+                }
+
+                return None;
+            }
+            Ok(s) => s.endianess(),
+        };
+
+        // to check the required byte size of this channel's data type, look
+        // at data_types.rs and the TdmsDataType enum
+        let mut buf: [u8; 8] = [0; 8];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        let seconds_since_epoch = match endianess {
+            Endianness::Little => i64::from_le_bytes(buf),
+            Endianness::Big => i64::from_be_bytes(buf),
+        };
+
+        let mut buf: [u8; 8] = [0; 8];
+
+        match self.reader.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    // TODO: bring in logger and print to  their log
+                    _ => println!("error reading value from file ${:?}", e),
+                }
+
+                return None;
+            }
+        }
+
+        let fractions_of_second = match endianess {
+            Endianness::Little => u64::from_le_bytes(buf),
+            Endianness::Big => u64::from_be_bytes(buf),
+        };
+
+        return Some(TdmsTimestamp(seconds_since_epoch, fractions_of_second));
     }
 }
