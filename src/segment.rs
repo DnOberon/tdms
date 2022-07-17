@@ -260,6 +260,10 @@ impl Segment {
                 None => continue,
                 Some(channels) => {
                     for (_, channel) in channels.iter_mut() {
+                        if channel.data_type == TdmsDataType::DAQmxRawData {
+                            continue;
+                        }
+
                         let mut i = 0;
                         loop {
                             let ChannelPositions(prev_start, prev_end) =
@@ -511,7 +515,7 @@ impl Metadata {
                 || first_byte == 0x0000126A
                 || first_byte == 0x00001369
             {
-                let index = DAQmxDataIndex::from_reader(endianness, r, true)?;
+                let index = DAQmxDataIndex::from_reader(endianness, r, false)?;
                 daqmx_data_index = Some(index);
             } else {
                 if first_byte != 0xFFFFFFFF && first_byte != 0x0000000 {
