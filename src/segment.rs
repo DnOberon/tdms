@@ -103,6 +103,10 @@ impl Segment {
                 for obj in &mut metadata.objects {
                     let path = obj.object_path.clone();
                     let paths: Vec<&str> = path.split("/").collect();
+
+                    if obj.object_path == "/" || paths.len() < 3 {
+                        continue;
+                    }
                     let mut data_type: TdmsDataType = TdmsDataType::Void;
 
                     if previous_segment.is_some()
