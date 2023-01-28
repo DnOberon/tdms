@@ -73,7 +73,12 @@ fn main() {
             // of calling this is set down for future changes
             let full_channel = match channel.data_type {
                 // the returned full channel is an iterator over raw data
-                TdmsDataType::DoubleFloat(_) => file.channel_data_double_float(channel),
+                // IMPORTANT NOTE: Unless you plan on reading the full channel WITHOUT reading any other channel then
+                // you MUST clone the file before pulling multiple channels. If you don't clone the file,
+                // the iterators will clash with each other and cause problems. I experimented with having
+                // the channels take ownership of file, but the amount of memory lost by having to
+                //copy everything over caused problems. Someone better than I needs to fix that.
+                TdmsDataType::DoubleFloat(_) => file.clone().channel_data_double_float(channel),
                 _ => {
                     panic!("{}", "channel for data type unimplemented")
                 }
