@@ -33,6 +33,7 @@ Here is a list of all supported iterators for TDMS data types. If completely unl
 | Single Float              | &check; - untested | &check; - untested | &cross; |
 | Single Float              | &check; - untested | &check; - untested | &cross; |
 | Single Float              | &check; - untested | &check; - untested | &cross; |
+| String                    | &check; - untested | &cross;            | &cross; |
 
 
 

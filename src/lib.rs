@@ -334,6 +334,16 @@ impl<'a> TDMSFile<'a> {
         return ChannelDataIter::new(vec, channel, reader);
     }
 
+    pub fn channel_data_string(
+        &self,
+        channel: &'a Channel,
+    ) -> Result<ChannelDataIter<String, File>, TdmsError> {
+        let vec = self.load_segments(channel.group_path.as_str(), channel.path.as_str());
+        let reader = BufReader::with_capacity(4096, File::open(self.path)?);
+
+        return ChannelDataIter::new(vec, channel, reader);
+    }
+
     fn load_segments(&self, group_path: &str, path: &str) -> Vec<&Segment> {
         let mut vec: Vec<&Segment> = vec![];
         let mut channel_in_segment: bool = false;

@@ -49,6 +49,7 @@ pub struct Channel {
     pub daqmx_data_index: Option<DAQmxDataIndex>,
     pub properties: Vec<MetadataProperty>,
     pub chunk_positions: Vec<ChannelPositions>,
+    pub string_offset_pos: Option<ChannelPositions>,
     pub interleaved_offset: u64,
 }
 
@@ -153,9 +154,10 @@ impl Segment {
 
                     if paths.len() >= 3 && paths[2] != "" {
                         let map = groups.get_mut(rem_quotes(paths[1]));
-                        let start_pos = data_pos.clone();
+                        let mut start_pos = data_pos.clone();
                         let mut end_pos = 0;
 
+                        let mut string_offset_pos: Option<ChannelPositions> = None;
                         let raw_data_index = match &obj.raw_data_index {
                             Some(index) => {
                                 let type_size = TdmsDataType::get_size(index.data_type);
@@ -165,13 +167,11 @@ impl Segment {
                                     if index.data_type == TdmsDataType::String
                                         && index.number_of_bytes.is_some()
                                     {
-                                        // our end position for a string channel should be the end of
-                                        // the array of uint32s representing the index
-                                        end_pos = data_pos + index.number_of_values * 4;
+                                        start_pos = start_pos + index.number_of_values * 4;
+                                        string_offset_pos = Some(ChannelPositions(data_pos, data_pos + index.number_of_values * 4));
 
-                                        // but we still need to iterate the main position to the end
-                                        // of the chunk
                                         data_pos = data_pos + index.number_of_bytes.unwrap();
+                                        end_pos = data_pos.clone();
                                         chunk_size += index.number_of_bytes.unwrap();
                                     } else {
                                         data_pos = data_pos
@@ -208,6 +208,7 @@ impl Segment {
                             // this will be calculated later as we need all the channels information
                             // prior to calculating this offset
                             interleaved_offset: 0,
+                            string_offset_pos
                         };
 
                         match map {

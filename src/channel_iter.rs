@@ -1,4 +1,4 @@
-use crate::data_type::TdmsTimestamp;
+use crate::data_type::{TdmsDataType, TdmsTimestamp};
 use crate::segment::{Channel, ChannelPositions};
 use crate::TdmsError::{ChannelDoesNotExist, EndOfSegments, GroupDoesNotExist};
 use crate::{Endianness, General, Segment, TdmsError};
@@ -6,6 +6,7 @@ use log::error;
 use std::cell::RefCell;
 use std::io::{BufReader, ErrorKind, Read, Seek, SeekFrom};
 use std::marker::PhantomData;
+use std::string::FromUtf8Error;
 
 #[derive(Debug)]
 pub struct ChannelDataIter<'a, T, R: Read + Seek> {
@@ -14,6 +15,12 @@ pub struct ChannelDataIter<'a, T, R: Read + Seek> {
     segments: Vec<&'a Segment>,
     reader: BufReader<R>,
     current_segment_index: RefCell<usize>,
+    // string channel type specific fields
+    current_segment_offsets: RefCell<Vec<u32>>,
+    string_offsets: RefCell<Vec<u32>>,
+    string_offset_index: RefCell<usize>,
+    string_previous_offset: RefCell<u32>,
+    offset_index: RefCell<usize>,
     _mask: PhantomData<T>,
 }
 
@@ -49,8 +56,15 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             segments,
             reader,
             current_segment_index: RefCell::new(0),
+            current_segment_offsets: RefCell::new(vec![]),
+            offset_index: RefCell::new(0),
             _mask: Default::default(),
+            string_offset_index: RefCell::new(0),
+            string_offsets: RefCell::new(vec![]),
+            string_previous_offset: RefCell::new(0),
         };
+
+        iter.set_string_offsets()?;
 
         // set the reader to the first segment's start position so that the rest of the reader works
         // correctly
@@ -62,6 +76,42 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
         }
 
         return Ok(iter);
+    }
+
+    fn set_string_offsets(&mut self) -> Result<(), TdmsError> {
+        // first zero out the values
+        self.string_offsets.swap(&RefCell::new(vec![]));
+        self.string_offset_index.swap(&RefCell::new(0));
+        match self.channel.get_mut().string_offset_pos {
+            None => {}
+            Some(offset_pos) => {
+                // switch the reader to the start of the offsets
+                self.reader.seek(SeekFrom::Start(offset_pos.0))?;
+
+                loop {
+                    if self.reader.stream_position()? >= offset_pos.1 {
+                        break;
+                    }
+
+                    let mut buf: [u8; 4] = [0; 4];
+                    self.reader.read_exact(&mut buf)?;
+
+                    let current_segment = match self.segments.get(0) {
+                        None => return Err(EndOfSegments()),
+                        Some(s) => s
+                    };
+
+                    let offset = match current_segment.endianess() {
+                        Endianness::Little => {u32::from_le_bytes(buf)}
+                        Endianness::Big => {u32::from_be_bytes(buf)}
+                    };
+
+                    self.string_offsets.get_mut().push(offset);
+                }
+            }
+        };
+
+        Ok(())
     }
 
     fn current_positions(&mut self, stream_pos: u64) -> Result<(), TdmsError> {
@@ -117,6 +167,7 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
         };
 
         self.channel.swap(&RefCell::new(channel));
+        self.set_string_offsets()?;
 
         for positions in self.channel.borrow().chunk_positions.iter() {
             if stream_pos >= positions.1 {
@@ -189,6 +240,7 @@ impl<'a, T, R: Read + Seek> ChannelDataIter<'a, T, R> {
             };
 
             self.channel.swap(&RefCell::new(channel));
+            self.set_string_offsets()?;
 
             return self.advance_reader_to_next();
         }
@@ -654,6 +706,59 @@ impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, bool, R> {
         }
 
         return Some(buf[0] != 0);
+    }
+}
+
+impl<'a, R: Read + Seek> Iterator for ChannelDataIter<'a, String, R> {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // advance to next value - this function handles interleaved iteration and moving to the
+        // next segment
+        let current_segment = self.advance_reader_to_next();
+
+        // to check the required byte size of this channel's data type we must used the string offset
+        // vector to determine how large to make this.
+        let index = self.string_offset_index.borrow().clone();
+        let size = match self.string_offsets.borrow().get(index) {
+            None => {
+                return None;
+            }
+            Some(o) => {
+                let result = o.clone() - self.string_previous_offset.borrow().clone();
+                self.string_previous_offset.swap(&RefCell::new(o.clone()));
+                result
+            }
+        };
+
+
+        self.string_offset_index.swap(&RefCell::new(index +1));
+
+        let mut vec = vec![0; size as usize];
+
+        match self.reader.read_exact(&mut vec) {
+            Ok(_) => {}
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::UnexpectedEof => {}
+                    _ => error!("error reading value from file: {:?}", e),
+                }
+
+                println!("{:?}", e);
+
+                return None;
+            }
+        }
+
+        match String::from_utf8(vec) {
+            Ok(s) => {
+                return Some(s)
+            }
+            Err(e) => {
+                error!("unable to cast TDMS string to UTF8 String {:?}", e);
+                return None;
+            }
+        }
     }
 }
 
