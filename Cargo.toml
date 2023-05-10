@@ -15,9 +15,15 @@ hex = "0.4.3"
 extended = "0.1.0"
 fixed = "1.15.0"
 log = "0.4.17"
+time = { version = "0.3", optional = true, features = ["macros"] }
+chrono = { version = "0.4", optional = true }
 
 [dev-dependencies]
-pprof = { version = "0.10.0", features = ["flamegraph", "criterion", "protobuf-codec"] }
+pprof = { version = "0.10.0", features = [
+    "flamegraph",
+    "criterion",
+    "protobuf-codec",
+] }
 criterion = "0.3"
 
 
@@ -25,3 +31,6 @@ criterion = "0.3"
 name = "general_benchmarks"
 harness = false
 
+[features]
+time = ["dep:time"]
+chrono = ["dep:chrono"]

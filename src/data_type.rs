@@ -1,5 +1,9 @@
 use crate::{Big, Endianness, General, Little, TdmsError, UnknownDataType};
+#[cfg(feature = "chrono")]
+use chrono::{prelude::*, Duration};
 use std::io::{Read, Seek};
+#[cfg(feature = "time")]
+use time::{macros::datetime, Duration, PrimitiveDateTime};
 
 /// Represents the potential TDMS data types. Contained value is size in bytes if applicable
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -348,4 +352,41 @@ impl TDMSValue {
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct TdmsTimestamp(pub i64, pub u64);
+pub struct TdmsTimestamp {
+    pub seconds_since_ni_epoch: i64,
+    pub fractions_of_a_second: u64,
+}
+
+#[cfg(feature = "time")]
+impl TdmsTimestamp {
+    const NI_EPOCH: PrimitiveDateTime = datetime!(1904-01-01 00:00);
+
+    pub fn to_duration(&self) -> Duration {
+        Duration::seconds(self.seconds_since_ni_epoch)
+            + Duration::seconds_f64(self.fractions_of_a_second as f64 / u64::MAX as f64)
+    }
+
+    pub fn to_primitive_date_time(&self) -> PrimitiveDateTime {
+        TdmsTimestamp::NI_EPOCH + self.to_duration()
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl TdmsTimestamp {
+    const NI_EPOCH: NaiveDateTime = NaiveDate::from_ymd_opt(1904, 1, 1)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap();
+
+    pub fn to_duration(&self) -> Duration {
+        Duration::seconds(self.seconds_since_ni_epoch)
+            + (Duration::from_std(std::time::Duration::from_secs_f64(
+                self.fractions_of_a_second as f64 / u64::MAX as f64,
+            ))
+            .unwrap())
+    }
+
+    pub fn to_naive_date_time(&self) -> NaiveDateTime {
+        TdmsTimestamp::NI_EPOCH + self.to_duration()
+    }
+}
