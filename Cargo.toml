@@ -1,27 +1,2 @@
-[package]
-name = "tdms"
-description = "A LabView TDMS file parser written in Rust"
-version = "0.3.0"
-edition = "2021"
-license = "MIT"
-repository = "https://github.com/DnOberon/tdms"
-# no need to include the test data directory in the crate, in fact that makes it so we can't publish
-exclude = ["/data"]
-
-[dependencies]
-indexmap = "1.8.2"
-thiserror = "1.0"
-hex = "0.4.3"
-extended = "0.1.0"
-fixed = "1.15.0"
-log = "0.4.17"
-
-[dev-dependencies]
-pprof = { version = "0.10.0", features = ["flamegraph", "criterion", "protobuf-codec"] }
-criterion = "0.3"
-
-
-[[bench]]
-name = "general_benchmarks"
-harness = false
-
+[workspace]
+members = ["tdms-format", "tdms", "tokio-tdms"]
