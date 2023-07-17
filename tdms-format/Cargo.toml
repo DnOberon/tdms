@@ -1,0 +1,15 @@
+[package]
+name = "tdms-format"
+description = "NI TDMS file format for Rust"
+version = "0.3.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/DnOberon/tdms"
+
+[dependencies]
+indexmap = "1.8.2"
+thiserror = "1.0"
+hex = "0.4.3"
+extended = "0.1.0"
+fixed = "1.15.0"
+log = "0.4.17"

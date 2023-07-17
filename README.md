@@ -48,7 +48,7 @@ Here is a list of all supported iterators for TDMS data types. If completely unl
 extern crate tdms;
 
 use std::path::Path;
-use tdms::data_type::TdmsDataType;
+use tdms_format::data_type::TdmsDataType;
 use tdms::TDMSFile;
 
 fn main() {
